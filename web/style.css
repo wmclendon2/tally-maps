@@ -184,6 +184,11 @@ button:disabled { opacity: .45; cursor: default; }
   font-family: var(--figures); font-weight: 600; font-size: 46px; line-height: 0.95;
   letter-spacing: -0.5px; color: var(--count); font-variant-numeric: tabular-nums lining-nums;
 }
+/* "(est.)" after the count: plainly there, but the number stays the figure you read. */
+.count-value .est {
+  font-family: var(--ui); font-size: 15px; font-weight: 500; letter-spacing: 0;
+  color: var(--muted); vertical-align: 0.15em; margin-left: 4px;
+}
 .counted { margin: 6px 0 0; font-size: 14px; }
 .counted-source { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
 

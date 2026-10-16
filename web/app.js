@@ -27,6 +27,8 @@ const RAMP = ["#dcc0e0", "#c994c7", "#df65b0", "#e7298a", "#ce1256", "#980043"];
 
 const $ = (id) => document.getElementById(id);
 const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+// Every count of people says it is an estimate, so no one takes it for a census.
+const EST = "(est.)";
 const fmtDensity = (d) => (d >= 100 ? fmtInt(d) : d.toFixed(d >= 10 ? 0 : 1));
 const fmtArea = (a) => (a >= 100 ? fmtInt(a) : a.toFixed(1));
 const DEBUG = new URLSearchParams(location.search).get("debug") === "1";
@@ -206,7 +208,7 @@ const showHex = (e) => {
   const n = Math.round(e.features[0].properties.population);
   popup
     .setLngLat(e.lngLat)
-    .setHTML(`<b>${fmtInt(n)}</b> ${n === 1 ? "person" : "people"} in this hexagon`)
+    .setHTML(`<b>${fmtInt(n)}</b> ${EST} ${n === 1 ? "person" : "people"} in this hexagon`)
     .addTo(map);
 };
 map.on("mousemove", "population-fill", showHex);
@@ -783,7 +785,7 @@ async function describeData() {
     scope.innerHTML =
       `It has data for <span class="fig">${fmtInt(n)}</span> ` +
       `${n === 1 ? "country or territory" : "countries and territories"}, ` +
-      `<span class="fig">${people}</span> people in all. Grey land on the map has no data yet.`;
+      `<span class="fig">${people}</span> ${EST} people in all. Grey land on the map has no data yet.`;
     scope.hidden = false;
     $("about-version").textContent = `Version ${SHELL}, data built ${m.built}.`;
   } catch (err) {
@@ -1283,7 +1285,7 @@ function render(res) {
   // A total that leaves a country out must say so: it is a floor, not an answer.
   if (res.missing?.length) {
     setStatus(
-      `At least ${fmtInt(res.total)}: could not download ${listNames(res.missing)} data, ` +
+      `At least ${fmtInt(res.total)} ${EST}: could not download ${listNames(res.missing)} data, ` +
         "so it is left out. Check your connection and draw again.",
       true,
     );
@@ -1490,7 +1492,7 @@ async function exportImage() {
     ctx.strokeRect(rx + 0.5, top + 0.5, OW - 1, OH - 1);
 
     let y = top + OH + 60;
-    drawStat(ctx, rx, y, "People", fmtInt(res.total), "", { size: 56, color: "#980043" });
+    drawStat(ctx, rx, y, "People", fmtInt(res.total), EST, { size: 56, color: "#980043" });
     y += 12;
     y += 100;
     drawStat(ctx, rx, y, "Area", showArea(res.areaKm2), U().area);

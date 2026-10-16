@@ -11,7 +11,7 @@
 // apart. The query string is what stops a freshly fetched index.html from pairing with a stale cached
 // app.js: a mismatched pair once shipped black hexagons and a dead detail toggle with no
 // error at all, because the old script read a field the new answers no longer carried.
-const SHELL_VERSION = "37";
+const SHELL_VERSION = "38";
 const CACHE = `tally-shell-v${SHELL_VERSION}`;
 const SHELL = [
   "./",
