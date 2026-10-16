@@ -1,0 +1,38 @@
+[project]
+name = "tally-maps"
+version = "0.1.0"
+description = "Draw a polygon, get population and a density heatmap from H3-aggregated Meta/WorldPop rasters."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "rasterio>=1.4",
+    "h3>=4.1",
+    "numpy>=2.0",
+    "shapely>=2.0",
+    "pillow>=10.1",
+    "typer>=0.15",
+    "rich>=13",
+]
+
+[dependency-groups]
+# Installed by `uv sync` by default.
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+# Headless Chrome checks of static.js (scripts/browser_parity.py, browser_countries.py):
+# `uv sync --group browser`, then `uv run playwright install chromium` once.
+browser = ["playwright>=1.48"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+# A third-party deprecation, not ours: rasterio's window maths.
+filterwarnings = [
+    "ignore:Use `@` matmul instead of `\\*` mul operator:PendingDeprecationWarning",
+]

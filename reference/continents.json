@@ -1,0 +1,1209 @@
+{
+ "_source": "Natural Earth 1:50m admin 0 countries (NAME, CONTINENT, TYPE fields)",
+ "_url": "https://github.com/nvkelso/natural-earth-vector",
+ "_license": "public domain",
+ "_fetched": "2026-09-19",
+ "_note": "MYT, REU, GLP and GUF are added by hand: Natural Earth files them under France, but HDX ships them as separate ISO3 rasters. MUS, SYC and MDV are added by hand under their REGION_UN (Africa, Africa, Asia): Natural Earth's CONTINENT is \"Seven seas (open ocean)\", but they are countries with Meta rasters. Antarctica and the other open-ocean features are dropped. `type` distinguishes sovereign states from dependencies and disputed territories. ISR and KOS are typed \"Sovereign country\" by hand (Natural Earth says \"Disputed\"), so the coverage map lists them with the countries (user decision, 2026-10-13). Abbreviated Natural Earth names (\"Bosnia and Herz.\", \"St-Martin\") are replaced by its NAME_EN (NAME_LONG for N. Cyprus), COG is \"Republic of the Congo\" and SWZ \"Eswatini\" (2026-10-13).",
+ "countries": {
+  "ABW": {
+   "name": "Aruba",
+   "continent": "North America",
+   "type": "Country"
+  },
+  "AFG": {
+   "name": "Afghanistan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "AGO": {
+   "name": "Angola",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "AIA": {
+   "name": "Anguilla",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "ALB": {
+   "name": "Albania",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "ALD": {
+   "name": "Åland",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "AND": {
+   "name": "Andorra",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "ARE": {
+   "name": "United Arab Emirates",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "ARG": {
+   "name": "Argentina",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "ARM": {
+   "name": "Armenia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "ASM": {
+   "name": "American Samoa",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "ATC": {
+   "name": "Ashmore and Cartier Islands",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "ATG": {
+   "name": "Antigua and Barbuda",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "AUS": {
+   "name": "Australia",
+   "continent": "Oceania",
+   "type": "Country"
+  },
+  "AUT": {
+   "name": "Austria",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "AZE": {
+   "name": "Azerbaijan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "BDI": {
+   "name": "Burundi",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "BEL": {
+   "name": "Belgium",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "BEN": {
+   "name": "Benin",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "BFA": {
+   "name": "Burkina Faso",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "BGD": {
+   "name": "Bangladesh",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "BGR": {
+   "name": "Bulgaria",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "BHR": {
+   "name": "Bahrain",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "BHS": {
+   "name": "Bahamas",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "BIH": {
+   "name": "Bosnia and Herzegovina",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "BLM": {
+   "name": "Saint Barthélemy",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "BLR": {
+   "name": "Belarus",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "BLZ": {
+   "name": "Belize",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "BMU": {
+   "name": "Bermuda",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "BOL": {
+   "name": "Bolivia",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "BRA": {
+   "name": "Brazil",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "BRB": {
+   "name": "Barbados",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "BRN": {
+   "name": "Brunei",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "BTN": {
+   "name": "Bhutan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "BWA": {
+   "name": "Botswana",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "CAF": {
+   "name": "Central African Republic",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "CAN": {
+   "name": "Canada",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "CHE": {
+   "name": "Switzerland",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "CHL": {
+   "name": "Chile",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "CHN": {
+   "name": "China",
+   "continent": "Asia",
+   "type": "Country"
+  },
+  "CIV": {
+   "name": "Côte d'Ivoire",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "CMR": {
+   "name": "Cameroon",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "COD": {
+   "name": "Democratic Republic of the Congo",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "COG": {
+   "name": "Republic of the Congo",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "COK": {
+   "name": "Cook Islands",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "COL": {
+   "name": "Colombia",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "COM": {
+   "name": "Comoros",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "CPV": {
+   "name": "Cabo Verde",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "CRI": {
+   "name": "Costa Rica",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "CUB": {
+   "name": "Cuba",
+   "continent": "North America",
+   "type": "Sovereignty"
+  },
+  "CUW": {
+   "name": "Curaçao",
+   "continent": "North America",
+   "type": "Country"
+  },
+  "CYM": {
+   "name": "Cayman Islands",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "CYN": {
+   "name": "Northern Cyprus",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "CYP": {
+   "name": "Cyprus",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "CZE": {
+   "name": "Czechia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "DEU": {
+   "name": "Germany",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "DJI": {
+   "name": "Djibouti",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "DMA": {
+   "name": "Dominica",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "DNK": {
+   "name": "Denmark",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "DOM": {
+   "name": "Dominican Republic",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "DZA": {
+   "name": "Algeria",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "ECU": {
+   "name": "Ecuador",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "EGY": {
+   "name": "Egypt",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "ERI": {
+   "name": "Eritrea",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "ESP": {
+   "name": "Spain",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "EST": {
+   "name": "Estonia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "ETH": {
+   "name": "Ethiopia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "FIN": {
+   "name": "Finland",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "FJI": {
+   "name": "Fiji",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "FLK": {
+   "name": "Falkland Islands",
+   "continent": "South America",
+   "type": "Disputed"
+  },
+  "FRA": {
+   "name": "France",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "FRO": {
+   "name": "Faroe Islands",
+   "continent": "Europe",
+   "type": "Dependency"
+  },
+  "FSM": {
+   "name": "Micronesia",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "GAB": {
+   "name": "Gabon",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "GBR": {
+   "name": "United Kingdom",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "GEO": {
+   "name": "Georgia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "GGY": {
+   "name": "Guernsey",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "GHA": {
+   "name": "Ghana",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "GIN": {
+   "name": "Guinea",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "GLP": {
+   "name": "Guadeloupe",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "GMB": {
+   "name": "Gambia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "GNB": {
+   "name": "Guinea-Bissau",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "GNQ": {
+   "name": "Equatorial Guinea",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "GRC": {
+   "name": "Greece",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "GRD": {
+   "name": "Grenada",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "GRL": {
+   "name": "Greenland",
+   "continent": "North America",
+   "type": "Country"
+  },
+  "GTM": {
+   "name": "Guatemala",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "GUF": {
+   "name": "French Guiana",
+   "continent": "South America",
+   "type": "Dependency"
+  },
+  "GUM": {
+   "name": "Guam",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "GUY": {
+   "name": "Guyana",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "HKG": {
+   "name": "Hong Kong",
+   "continent": "Asia",
+   "type": "Country"
+  },
+  "HND": {
+   "name": "Honduras",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "HRV": {
+   "name": "Croatia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "HTI": {
+   "name": "Haiti",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "HUN": {
+   "name": "Hungary",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "IDN": {
+   "name": "Indonesia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "IMN": {
+   "name": "Isle of Man",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "IND": {
+   "name": "India",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "IOA": {
+   "name": "Australian Indian Ocean Territories",
+   "continent": "Asia",
+   "type": "Dependency"
+  },
+  "IRL": {
+   "name": "Ireland",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "IRN": {
+   "name": "Iran",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "IRQ": {
+   "name": "Iraq",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "ISL": {
+   "name": "Iceland",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "ISR": {
+   "name": "Israel",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "ITA": {
+   "name": "Italy",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "JAM": {
+   "name": "Jamaica",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "JEY": {
+   "name": "Jersey",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "JOR": {
+   "name": "Jordan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "JPN": {
+   "name": "Japan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "KAS": {
+   "name": "Siachen Glacier",
+   "continent": "Asia",
+   "type": "Indeterminate"
+  },
+  "KAZ": {
+   "name": "Kazakhstan",
+   "continent": "Asia",
+   "type": "Sovereignty"
+  },
+  "KEN": {
+   "name": "Kenya",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "KGZ": {
+   "name": "Kyrgyzstan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "KHM": {
+   "name": "Cambodia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "KIR": {
+   "name": "Kiribati",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "KNA": {
+   "name": "Saint Kitts and Nevis",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "KOR": {
+   "name": "South Korea",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "KOS": {
+   "name": "Kosovo",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "KWT": {
+   "name": "Kuwait",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "LAO": {
+   "name": "Laos",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "LBN": {
+   "name": "Lebanon",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "LBR": {
+   "name": "Liberia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "LBY": {
+   "name": "Libya",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "LCA": {
+   "name": "Saint Lucia",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "LIE": {
+   "name": "Liechtenstein",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "LKA": {
+   "name": "Sri Lanka",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "LSO": {
+   "name": "Lesotho",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "LTU": {
+   "name": "Lithuania",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "LUX": {
+   "name": "Luxembourg",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "LVA": {
+   "name": "Latvia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "MAC": {
+   "name": "Macao",
+   "continent": "Asia",
+   "type": "Country"
+  },
+  "MAF": {
+   "name": "Saint Martin",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "MAR": {
+   "name": "Morocco",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MCO": {
+   "name": "Monaco",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "MDA": {
+   "name": "Moldova",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "MDG": {
+   "name": "Madagascar",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MDV": {
+   "name": "Maldives",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "MEX": {
+   "name": "Mexico",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "MHL": {
+   "name": "Marshall Islands",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "MKD": {
+   "name": "North Macedonia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "MLI": {
+   "name": "Mali",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MLT": {
+   "name": "Malta",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "MMR": {
+   "name": "Myanmar",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "MNE": {
+   "name": "Montenegro",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "MNG": {
+   "name": "Mongolia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "MNP": {
+   "name": "Northern Mariana Islands",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "MOZ": {
+   "name": "Mozambique",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MRT": {
+   "name": "Mauritania",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MSR": {
+   "name": "Montserrat",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "MUS": {
+   "name": "Mauritius",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MWI": {
+   "name": "Malawi",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "MYS": {
+   "name": "Malaysia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "MYT": {
+   "name": "Mayotte",
+   "continent": "Africa",
+   "type": "Dependency"
+  },
+  "NAM": {
+   "name": "Namibia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "NCL": {
+   "name": "New Caledonia",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "NER": {
+   "name": "Niger",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "NFK": {
+   "name": "Norfolk Island",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "NGA": {
+   "name": "Nigeria",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "NIC": {
+   "name": "Nicaragua",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "NIU": {
+   "name": "Niue",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "NLD": {
+   "name": "Netherlands",
+   "continent": "Europe",
+   "type": "Country"
+  },
+  "NOR": {
+   "name": "Norway",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "NPL": {
+   "name": "Nepal",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "NRU": {
+   "name": "Nauru",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "NZL": {
+   "name": "New Zealand",
+   "continent": "Oceania",
+   "type": "Country"
+  },
+  "OMN": {
+   "name": "Oman",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "PAK": {
+   "name": "Pakistan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "PAN": {
+   "name": "Panama",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "PCN": {
+   "name": "Pitcairn Islands",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "PER": {
+   "name": "Peru",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "PHL": {
+   "name": "Philippines",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "PLW": {
+   "name": "Palau",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "PNG": {
+   "name": "Papua New Guinea",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "POL": {
+   "name": "Poland",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "PRI": {
+   "name": "Puerto Rico",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "PRK": {
+   "name": "North Korea",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "PRT": {
+   "name": "Portugal",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "PRY": {
+   "name": "Paraguay",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "PSX": {
+   "name": "Palestine",
+   "continent": "Asia",
+   "type": "Indeterminate"
+  },
+  "PYF": {
+   "name": "French Polynesia",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "QAT": {
+   "name": "Qatar",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "REU": {
+   "name": "Réunion",
+   "continent": "Africa",
+   "type": "Dependency"
+  },
+  "ROU": {
+   "name": "Romania",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "RUS": {
+   "name": "Russia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "RWA": {
+   "name": "Rwanda",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SAH": {
+   "name": "Western Sahara",
+   "continent": "Africa",
+   "type": "Indeterminate"
+  },
+  "SAU": {
+   "name": "Saudi Arabia",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "SDN": {
+   "name": "Sudan",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SDS": {
+   "name": "South Sudan",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SEN": {
+   "name": "Senegal",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SGP": {
+   "name": "Singapore",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "SLB": {
+   "name": "Solomon Islands",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "SLE": {
+   "name": "Sierra Leone",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SLV": {
+   "name": "El Salvador",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "SMR": {
+   "name": "San Marino",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "SOL": {
+   "name": "Somaliland",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SOM": {
+   "name": "Somalia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SPM": {
+   "name": "Saint Pierre and Miquelon",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "SRB": {
+   "name": "Serbia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "STP": {
+   "name": "São Tomé and Principe",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SUR": {
+   "name": "Suriname",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "SVK": {
+   "name": "Slovakia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "SVN": {
+   "name": "Slovenia",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "SWE": {
+   "name": "Sweden",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "SWZ": {
+   "name": "Eswatini",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SXM": {
+   "name": "Sint Maarten",
+   "continent": "North America",
+   "type": "Country"
+  },
+  "SYC": {
+   "name": "Seychelles",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "SYR": {
+   "name": "Syria",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TCA": {
+   "name": "Turks and Caicos Islands",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "TCD": {
+   "name": "Chad",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "TGO": {
+   "name": "Togo",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "THA": {
+   "name": "Thailand",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TJK": {
+   "name": "Tajikistan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TKM": {
+   "name": "Turkmenistan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TLS": {
+   "name": "Timor-Leste",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TON": {
+   "name": "Tonga",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "TTO": {
+   "name": "Trinidad and Tobago",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "TUN": {
+   "name": "Tunisia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "TUR": {
+   "name": "Turkey",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TUV": {
+   "name": "Tuvalu",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "TWN": {
+   "name": "Taiwan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "TZA": {
+   "name": "Tanzania",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "UGA": {
+   "name": "Uganda",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "UKR": {
+   "name": "Ukraine",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "URY": {
+   "name": "Uruguay",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "USA": {
+   "name": "United States of America",
+   "continent": "North America",
+   "type": "Country"
+  },
+  "UZB": {
+   "name": "Uzbekistan",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "VAT": {
+   "name": "Vatican",
+   "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "VCT": {
+   "name": "Saint Vincent and the Grenadines",
+   "continent": "North America",
+   "type": "Sovereign country"
+  },
+  "VEN": {
+   "name": "Venezuela",
+   "continent": "South America",
+   "type": "Sovereign country"
+  },
+  "VGB": {
+   "name": "British Virgin Islands",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "VIR": {
+   "name": "United States Virgin Islands",
+   "continent": "North America",
+   "type": "Dependency"
+  },
+  "VNM": {
+   "name": "Vietnam",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "VUT": {
+   "name": "Vanuatu",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "WLF": {
+   "name": "Wallis and Futuna",
+   "continent": "Oceania",
+   "type": "Dependency"
+  },
+  "WSM": {
+   "name": "Samoa",
+   "continent": "Oceania",
+   "type": "Sovereign country"
+  },
+  "YEM": {
+   "name": "Yemen",
+   "continent": "Asia",
+   "type": "Sovereign country"
+  },
+  "ZAF": {
+   "name": "South Africa",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "ZMB": {
+   "name": "Zambia",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  },
+  "ZWE": {
+   "name": "Zimbabwe",
+   "continent": "Africa",
+   "type": "Sovereign country"
+  }
+ }
+}

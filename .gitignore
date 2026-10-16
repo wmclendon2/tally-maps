@@ -1,0 +1,28 @@
+# data: large rasters, boundaries, downloads (never commit)
+data/*
+!data/.gitkeep
+# old local database dumps (API mode, retired)
+backups/
+# python
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# secrets / local config
+.env
+# private notes (never published)
+private/
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+.obsidian/
+# claude local
+.claude/settings.json
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/.cc-writes/
+# static site build from scripts/build_static.py
+dist/

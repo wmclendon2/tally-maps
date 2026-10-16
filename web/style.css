@@ -1,0 +1,403 @@
+/* Copyright (c) 2026 Woody McLendon
+ * SPDX-License-Identifier: MIT */
+/* Tally's panel: a tally sheet. The count is the one loud thing, set in condensed
+   figures in the heatmap's darkest step; everything around it is quiet, ruled with
+   hairlines rather than boxed in cards. Blue means "yours": your shape, your actions,
+   the outline drawn on the map. Barlow is a signage and map-label face. */
+
+@font-face {
+  font-family: "Barlow"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("vendor/@fontsource/barlow@5.3.0/barlow-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("vendor/@fontsource/barlow@5.3.0/barlow-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("vendor/@fontsource/barlow@5.3.0/barlow-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Semi Condensed"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("vendor/@fontsource/barlow-semi-condensed@5.3.0/barlow-semi-condensed-latin-600-normal.woff2")
+    format("woff2");
+}
+
+:root {
+  --paper: rgba(255, 255, 255, 0.95);
+  --paper-solid: #ffffff;
+  --ink: #1d1a24;
+  --muted: #6b6577;
+  --rule: #e2dee8;
+  --wash: #f2f0f5;
+  --accent: #1f6feb;
+  --accent-ink: #ffffff;
+  --count: #980043;
+  --finish: #1a7f4b;
+  --error: #b42318;
+  --shadow: 0 1px 2px rgba(29, 26, 36, 0.08), 0 8px 28px rgba(29, 26, 36, 0.16);
+  --ui: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --figures: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: rgba(27, 24, 33, 0.95);
+    --paper-solid: #1b1821;
+    --ink: #f1edf5;
+    --muted: #a39cae;
+    --rule: #37313f;
+    --wash: #27222e;
+    --accent: #5b95ff;
+    --count: #f39bcb;
+    --finish: #2fb36a;
+    --error: #ff8a7a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; font-family: var(--ui); color: var(--ink); }
+#map { position: absolute; inset: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+#panel {
+  position: absolute; z-index: 10;
+  top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left));
+  width: 316px; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px);
+  overflow: auto; box-sizing: border-box; padding: 16px 18px;
+  font-size: 14.5px; line-height: 1.4;
+  background: var(--paper); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-radius: 14px; box-shadow: var(--shadow);
+}
+
+/* ---- brand ---- */
+.brand { position: relative; display: flex; align-items: center; gap: 10px; padding-right: 30px; }
+.mark { width: 30px; height: 30px; flex: none; }
+h1 {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 19px; font-weight: 600; line-height: 1.1; letter-spacing: -0.1px;
+}
+.tagline { font-size: 13px; color: var(--muted); margin: 1px 0 0; }
+
+/* ---- buttons ---- */
+button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font: inherit; font-size: 14px; font-weight: 500; line-height: 1.2;
+  padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  background: var(--wash); color: var(--ink); border: 1px solid transparent;
+  transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+button:active { transform: translateY(1px); }
+button svg { width: 16px; height: 16px; flex: none; fill: currentColor; }
+button.primary { background: var(--accent); color: var(--accent-ink); }
+button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, black); }
+/* Waiting for a click on the map: still clearly the live control, not a disabled one. */
+button.primary.active, button.primary.active:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--paper-solid));
+  color: var(--accent); border-color: var(--accent);
+}
+button.finish { background: var(--finish); color: #fff; }
+button.ghost { background: transparent; border-color: var(--rule); }
+button.ghost:hover { border-color: var(--muted); }
+button.small { font-size: 13px; padding: 5px 10px; }
+button:disabled { opacity: .45; cursor: default; }
+/* Fingers: no control smaller than about 40 px tall. */
+@media (pointer: coarse) {
+  button { min-height: 40px; }
+  button.small, .seg { min-height: 36px; }
+}
+
+/* The phone sheet's handle; style.css shows it only at the phone breakpoint. */
+.grabber { display: none; }
+
+/* ---- what to count: tabs, then the chosen way's one sentence and one action ---- */
+.modes {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  margin: 16px 0 0; border-bottom: 1px solid var(--rule);
+}
+.mode {
+  border: 0; border-radius: 0; background: none; padding: 7px 4px 8px; margin-bottom: -1px;
+  font-size: 14px; font-weight: 500; color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.mode:hover { color: var(--ink); }
+.mode[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.mode:active { transform: none; }
+.mode-pane { padding: 12px 0 2px; }
+.how { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.how label { color: inherit; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions button { flex: 1 1 auto; }
+#radius {
+  width: 4.2em; margin: 0 2px; padding: 3px 6px; border-radius: 6px;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); text-align: right;
+  background: var(--paper-solid); border: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}
+#radius-unit { color: var(--ink); font-weight: 500; }
+/* Drawing with a finger: Add corner across the top, the rest beneath it. */
+.sketch-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#sketch-add { grid-column: 1 / -1; padding: 11px 14px; font-size: 15px; }
+#sketch-finish:disabled { background: var(--wash); color: var(--muted); }
+
+/* Where the next corner goes: four arms round an open centre, haloed white so it reads
+   on imagery, heatmap and grey alike. It turns into a filled ring over the first corner. */
+.crosshair {
+  position: fixed; z-index: 5; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center top / 2px 15px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center bottom / 2px 15px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) left center / 15px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right center / 15px 2px no-repeat;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);
+}
+.crosshair::after {
+  content: ""; position: absolute; inset: 18px; border-radius: 50%;
+  border: 2px solid var(--accent); transition: inset .12s ease, background .12s ease;
+}
+.crosshair.closing::after { inset: 13px; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+#country-pick {
+  width: 100%; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 8px;
+  color: var(--ink); background: var(--paper-solid); border: 1px solid var(--rule);
+}
+
+/* ---- the count ---- */
+#result { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); }
+/* The count's own close control, top right, quiet until pointed at (replaced Clear, F-23). */
+.count { position: relative; padding-right: 36px; }
+.count-close {
+  position: absolute; top: -4px; right: -6px; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--muted);
+}
+.count-close svg { width: 18px; height: 18px; }
+.count-close:hover { background: var(--wash); color: var(--ink); }
+.count-close:active { transform: none; }
+@media (pointer: coarse) {
+  .count-close { width: 40px; height: 40px; min-height: 0; top: -8px; right: -10px; }
+}
+.count-value {
+  font-family: var(--figures); font-weight: 600; font-size: 46px; line-height: 0.95;
+  letter-spacing: -0.5px; color: var(--count); font-variant-numeric: tabular-nums lining-nums;
+}
+.counted { margin: 6px 0 0; font-size: 14px; }
+.counted-source { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+
+.facts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 0; padding: 10px 0 0;
+  border-top: 1px solid var(--rule);
+}
+.facts dt { font-size: 12.5px; color: var(--muted); }
+.facts dd {
+  margin: 1px 0 0; font-family: var(--figures); font-weight: 600; font-size: 22px; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.facts .unit {
+  font-family: var(--ui); font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 4px;
+}
+
+.legend { margin: 14px 0 0; }
+.legend-bar { height: 8px; border-radius: 2px; }
+.legend-ticks {
+  display: flex; justify-content: space-between; margin-top: 4px;
+  font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.legend-title { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+.result-tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--rule);
+}
+.tools-label { font-size: 12.5px; color: var(--muted); }
+.result-actions { display: flex; gap: 8px; margin-top: 12px; }
+.seg-group { display: inline-flex; background: var(--wash); border-radius: 8px; padding: 2px; }
+.seg {
+  padding: 4px 11px; background: transparent; border: 0; border-radius: 6px;
+  font-size: 13px; color: var(--muted);
+}
+.seg.active { background: var(--paper-solid); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.14); }
+.seg:disabled { opacity: .45; box-shadow: none; }
+.detail-note { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+
+.meta {
+  display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px;
+  margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--rule);
+}
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.status { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.status:empty { display: none; }
+.status.error { color: var(--error); }
+
+.maplibregl-popup-content {
+  font-family: var(--ui); font-size: 13px; border-radius: 8px; padding: 7px 10px; box-shadow: var(--shadow);
+}
+.maplibregl-ctrl-group { border-radius: 8px !important; overflow: hidden; }
+/* Map credits: flush with the bottom edge, on an opaque band with a shadow lifting it off
+   the map, so they stay readable over dark imagery and dense heatmaps. */
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  margin: 0; padding: 4px 10px; border-radius: 8px 0 0 0;
+  background: rgba(255, 255, 255, 0.94); box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.22);
+  font-size: 11.5px; line-height: 1.45; color: #2d2833;
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+}
+.maplibregl-ctrl-attrib a { color: #1b1523; }
+/* Folded credits on a phone (app.js): MapLibre's round (i) button, opening to the same
+   text. It needs its own padding for the button, which the band above would cover. */
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact {
+  margin: 0 calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) 0;
+  padding: 2px 24px 2px 0; min-height: 20px; border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact-show {
+  padding: 4px 30px 4px 10px;
+}
+
+@media (max-width: 600px) {
+  #panel {
+    top: auto; width: auto; max-height: 60vh; padding: 0 16px 14px; border-radius: 16px;
+    /* Sit above the credits bar, which app.js measures into --credits-h. */
+    bottom: calc(8px + var(--credits-h, env(safe-area-inset-bottom)));
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+  }
+  .grabber {
+    display: flex; align-items: center; justify-content: center;
+    width: calc(100% + 32px); height: 22px; min-height: 0; margin: 0 -16px 2px; padding: 0;
+    background: none; border: 0; border-radius: 0;
+  }
+  .grabber::before {
+    content: ""; width: 38px; height: 4px; border-radius: 2px;
+    background: color-mix(in srgb, var(--muted) 45%, transparent);
+  }
+  .grabber:active { transform: none; }
+  .mark { width: 26px; height: 26px; }
+  h1 { font-size: 17px; }
+  .tagline { display: none; }
+  .modes { margin-top: 10px; }
+  /* A phone has little map to spare: once there is a count, the how-to sentence goes. */
+  #panel.has-result .how:not(:has(input)) { display: none; }
+  .count-value { font-size: 38px; }
+  .mode-pane { padding-top: 10px; }
+  #result { margin-top: 12px; padding-top: 12px; }
+  .facts, .legend, .result-tools { margin-top: 10px; }
+  .legend-title { display: none; }
+  /* The sheet covers the bottom-right corner it would sit in. */
+  .maplibregl-ctrl-scale { display: none; }
+
+  /* Folded: the number and what it counted, nothing else (app.js setCollapsed). */
+  #panel.collapsed > :not(.grabber, .brand, #result, #status) { display: none; }
+  #panel.collapsed.has-result > .brand { display: none; }
+  #panel.collapsed #result { margin-top: 0; padding-top: 0; border-top: 0; }
+  #panel.collapsed #result > :not(.count) { display: none; }
+  #panel.collapsed .count { cursor: pointer; }
+  #panel.collapsed .count-value { font-size: 34px; }
+  /* Placing a shape or a point: only that tool, so the map is free to work on. */
+  #panel.tool-only { padding-top: 2px; }
+  #panel.tool-only > :not(.mode-pane, #status) { display: none; }
+  #panel.tool-only.has-result .how { display: block; margin-bottom: 10px; }
+}
+
+/* ---- the ? button and its sheet -------------------------------------------- */
+/* Echoes the Tally hexagon rather than a generic circle, and uses the ramp's two ends
+   so it belongs to the same palette as the heatmap. */
+.help {
+  position: absolute; top: -1px; right: -1px; width: 26px; height: 26px;
+  padding: 0; border: 0; background: none; line-height: 0; cursor: pointer;
+  border-radius: 8px;
+}
+.help svg { width: 26px; height: 26px; display: block; }
+.help .hex { fill: #f5d6e8; stroke: #df65b0; stroke-width: 1; }
+.help .qm { fill: none; stroke: #980043; stroke-width: 1.9; stroke-linecap: round; }
+.help .dot { fill: #980043; }
+.help .hex, .help .qm, .help .dot { transition: fill .15s ease, stroke .15s ease; }
+.help:hover .hex, .help:focus-visible .hex { fill: #980043; stroke: #980043; }
+.help:hover .qm, .help:focus-visible .qm { stroke: #fff; }
+.help:hover .dot, .help:focus-visible .dot { fill: #fff; }
+.help:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-color-scheme: dark) {
+  .help .hex { fill: #4a2440; stroke: #98356f; }
+  .help .qm { stroke: #f3b9d8; }
+  .help .dot { fill: #f3b9d8; }
+}
+/* The sheet slides in from the right over the map, which stays in view beside it; on a
+   phone it takes the whole screen. Same paper, type and hairlines as the panel. */
+.sheet { position: fixed; inset: 0; z-index: 20; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(29, 26, 36, 0.32); }
+.sheet-body {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(480px, 100vw);
+  box-sizing: border-box; overflow: auto; overscroll-behavior: contain;
+  padding: 0 28px calc(28px + env(safe-area-inset-bottom));
+  padding-right: calc(28px + env(safe-area-inset-right));
+  background: var(--paper-solid); color: var(--ink); box-shadow: var(--shadow);
+  font-size: 14.5px; line-height: 1.55;
+  animation: sheet-in .18s ease-out;
+}
+@keyframes sheet-in { from { transform: translateX(24px); opacity: 0; } }
+.sheet-head {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px;
+  padding: calc(18px + env(safe-area-inset-top)) 0 14px;
+  background: var(--paper-solid); border-bottom: 1px solid var(--rule);
+}
+.sheet-head h2 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.1px; }
+.sheet-section { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.sheet-section.sheet-intro { margin-top: 0; border-top: 0; }
+.sheet-section h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 600; }
+.sheet-section p { margin: 0 0 10px; }
+.sheet-section p:last-child { margin-bottom: 0; }
+.lede { font-size: 18px; line-height: 1.4; }
+/* Figures in the About text are set like the count, so they read as Tally's own numbers. */
+.fig {
+  font-family: var(--figures); font-weight: 600; font-size: 1.12em; color: var(--count);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.sheet-note { font-size: 13px; color: var(--muted); }
+.sheet-note.warn { color: var(--error); font-weight: 500; }
+.sheet-body a { color: var(--accent); text-underline-offset: 2px; }
+.sheet-section .seg-group { margin-top: 4px; }
+.sheet-section .seg { padding: 6px 12px; }
+#install { margin-top: 2px; }
+
+.credits {
+  display: grid; grid-template-columns: 6.2em 1fr; gap: 8px 12px; margin: 6px 0 0;
+  font-size: 13.5px; line-height: 1.5;
+}
+.credits dt { color: var(--muted); }
+.credits dd { margin: 0; }
+.sheet-version { margin-top: 18px !important; }
+
+/* Saved data, by continent: each a row that opens to its countries. */
+.saved-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.saved-list li {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-top: 1px solid var(--rule);
+}
+.saved-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.saved-name { font-weight: 500; }
+.saved-state { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.saved-list li.continent { display: block; padding: 0; }
+.continent summary {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer;
+  list-style: none;
+}
+.continent summary::-webkit-details-marker { display: none; }
+.continent summary::before {
+  content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 0 2px;
+  border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(-45deg);
+  transition: transform .15s ease;
+}
+.continent details[open] > summary::before { transform: rotate(45deg); }
+.continent summary .saved-name { font-weight: 600; font-size: 15px; }
+.continent .saved-list { margin: 0 0 10px 22px; }
+
+@media (max-width: 600px) {
+  .sheet-body { width: 100vw; padding-left: 18px; padding-right: 18px; }
+  .sheet-head { padding-top: calc(14px + env(safe-area-inset-top)); }
+  .continent .saved-list { margin-left: 14px; }
+}
