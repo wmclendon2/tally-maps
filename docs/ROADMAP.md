@@ -31,6 +31,7 @@ but it is a deliberate choice.
 | F-17 | Printable one-page report (PDF) for an area | Inbox | M | ★★ | ✅ | F-04 |
 | F-18 | Public batch API for developers | Parked | L | ★★ | ⚠️ | — |
 | F-25 | Make the app faster, first visit and large shapes | Shaped | M | ★★ | ✅ | — |
+| F-26 | First-visit welcome: a one-time hint, or open on an example count | Inbox | S | ★ | ✅ | Feedback from first-time users |
 
 ## Shaped items
 
@@ -94,6 +95,10 @@ Candidates, most likely payoff first:
   like every other country.
 - **F-13:** builds on provenance per pack, so "which download is this total from?" has an
   answer when Meta replaces a file.
+- **F-26:** waits for feedback: watch a few people open Tally for the first time without
+  help. If they find **Draw a shape** at once, drop it. Two shapes: a bubble by **Draw a
+  shape** shown once (remembered on the device), or open on an example already counted
+  (Cameroon, as on the link-preview card), which downloads data before anyone asks.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
