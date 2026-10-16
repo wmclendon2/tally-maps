@@ -64,3 +64,18 @@ def test_only_documents_ignore_the_query_string_offline():
     """Matching assets loosely offline would serve the previous app.js and undo all this."""
     assert 'ignoreSearch: req.mode === "navigate"' in SW
     assert "ignoreSearch: true" not in SW
+
+
+def test_link_preview_tags_match_the_image():
+    from PIL import Image
+
+    tags = dict(re.findall(r'<meta property="(og:[a-z:_]+)" content="([^"]*)"', INDEX))
+    for key in ("og:title", "og:description", "og:url", "og:image", "og:image:alt"):
+        assert tags.get(key), f"index.html needs {key} for link previews"
+    image = WEB / tags["og:image"].rsplit("/", 1)[-1]
+    assert image.exists(), f"{image.name} is missing; make it with scripts/og_image.py"
+    with Image.open(image) as im:
+        assert (im.width, im.height) == (int(tags["og:image:width"]), int(tags["og:image:height"]))
+        assert im.format.lower() in tags["og:image:type"]
+    assert image.stat().st_size < 300_000, "WhatsApp drops large preview images"
+    assert 'name="twitter:card" content="summary_large_image"' in INDEX

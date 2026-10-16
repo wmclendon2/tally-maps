@@ -34,7 +34,13 @@ def test_every_vendored_package_ships_a_licence():
 
 
 def page_assets() -> list[str]:
-    return re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"]+)"', INDEX)
+    """What the page fetches. rel="canonical" only names the page's address; it loads nothing."""
+    tags = re.findall(r"<(?:script|link)[^>]+>", INDEX)
+    return [
+        m.group(1)
+        for t in tags
+        if 'rel="canonical"' not in t and (m := re.search(r'(?:src|href)="([^"]+)"', t))
+    ]
 
 
 def test_page_loads_no_third_party_scripts_or_styles():

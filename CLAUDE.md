@@ -99,6 +99,9 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
 - Catalogue: `uv run python -m ingest.hdx` (Meta's countries and download sizes).
 - Coverage map: `UV_CACHE_DIR=.uv-cache uv run python scripts/coverage_map.py`
   (writes the committed `docs/img/coverage-map.png` + `coverage.json`).
+- Link-preview image: `UV_CACHE_DIR=.uv-cache uv run --group browser python scripts/og_image.py
+  --dist DIR` (a build of every country, so neighbours are not greyed) writes `web/og-image.jpg`
+  (1200x630, < 300 KB); the `og:*` tags in `index.html` describe it.
 - Vendored libs: `scripts/vendor_libs.py` (bump `PACKAGES`, rerun, fix the paths in
   `index.html`/`sw.js`, bump the shell version; it never deletes old versions).
 
