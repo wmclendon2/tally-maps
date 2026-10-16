@@ -79,3 +79,13 @@ def test_link_preview_tags_match_the_image():
         assert im.format.lower() in tags["og:image:type"]
     assert image.stat().st_size < 300_000, "WhatsApp drops large preview images"
     assert 'name="twitter:card" content="summary_large_image"' in INDEX
+
+
+def test_the_files_browsers_and_crawlers_ask_for_by_name_exist():
+    # Browsers, link previews and search engines request these at fixed paths, whatever
+    # the page declares; without them every visit logs a 404.
+    for name in ("favicon.ico", "apple-touch-icon.png", "robots.txt", "sitemap.xml"):
+        assert (WEB / name).exists(), f"web/{name} is missing"
+    site = re.search(r'<meta property="og:url" content="([^"]+)"', INDEX).group(1)
+    assert f"Sitemap: {site}sitemap.xml" in (WEB / "robots.txt").read_text()
+    assert f"<loc>{site}</loc>" in (WEB / "sitemap.xml").read_text()
