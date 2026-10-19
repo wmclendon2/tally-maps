@@ -26,11 +26,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Tally">
   <title>Tally</title>
+  <!-- The basemap's host (BASEMAP_STYLE in app.js): connect while the scripts download, so
+       the style and first tiles do not wait for DNS and TLS after app.js runs (F-25). -->
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=40">
+  <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
   <div id="map"></div>
@@ -278,7 +281,7 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=40"></script>
-  <script src="app.js?v=40"></script>
+  <script src="static.js?v=43"></script>
+  <script src="app.js?v=43"></script>
 </body>
 </html>

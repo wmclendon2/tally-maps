@@ -105,18 +105,53 @@ Aim for good Core Web Vitals (LCP < 2.5 s, INP < 200 ms, CLS < 0.1). Change one 
 time and measure before and after with the browser's own tools (Lighthouse, the
 Performance panel).
 
-A first visit is about 774 KB over the wire before map tiles: MapLibre 276 KB, the no-data
-layer 157 KB, the catalogue 76 KB, fonts 90 KB, h3-js 66 KB, Terra Draw 50 KB, the app
-28 KB. A count then downloads the parts it needs, up to about 3.4 MB each, once.
+**Measured 2026-10-19** (headless Chrome, cold cache, median of 5; phone = 412×823 at 2.6×,
+4× slower CPU, 4G at 150 ms and 9 Mbps). A first visit downloads 612 KB from Tally's own
+site, and the basemap from OpenFreeMap, which is most of the bytes.
 
-Candidates, most likely payoff first:
+| First visit | Before (v40) | Now (v43) |
+| --- | --- | --- |
+| Phone: map ready | 8.1 s | 4.8 s |
+| Phone: main thread blocked | 2.9 s | 1.4 s |
+| Phone: basemap downloaded | 3.5 MB | 2.0 MB |
+| Desktop: map ready | 3.0 s | 2.0 s |
+| Desktop: basemap downloaded | 6.6 MB | 3.6 MB |
+
+**Done:**
+- **Open on the start view** (v43, live 2026-10-19): the map opened on Cameroon and
+  jumped to the world once the data came, so every first visit fetched and drew
+  Cameroon's tiles for nothing.
+- **Preconnect to the basemap's host** (v43, live 2026-10-19).
+- **Tried and dropped:** preloading the basemap style. The style came 0.9 s sooner, but the
+  map was no sooner ready and the page finished parsing 0.3 s later.
+
+**Not worth it now:** the no-data layer already loads after the map is up (108 KB);
+loading Terra Draw only for mouse drawing saves 52 KB and about 20 ms of phone CPU; the
+catalogue (66 KB) is not on the map's critical path; the fonts already swap in, and the
+first paint is the panel's text at 0.6 s.
+
+**Faster, but they change how the map looks (owner's call):**
+- **Shaded relief at half resolution:** the basemap's relief images are most of its
+  download (phone 1.5 of 2.0 MB, desktop 3.1 of 3.7 MB). At half resolution (the raster
+  source's `tileSize` 512) the basemap falls to 1.2 MB on a phone and 0.7 MB on desktop, the
+  map is ready 0.9 s sooner on a phone, and the relief is slightly softer when zoomed in.
+  With no relief at all: 0.6 MB, 1.4 s sooner, and a flat map.
+- **Cap the map's pixel ratio at 2:** on a 2.6× phone the main thread is blocked half as
+  long (1.4 → 0.8 s) and the map is ready 0.3 s sooner; lines and labels are slightly
+  softer on screens denser than 2×.
+
+**The biggest remaining wait is data, not the page:** the Country tab downloads every part
+of a country to draw a few thousand coarse hexagons: India 46 MB (43 s on the phone's 4G),
+the USA 35 MB (34 s). A big shape at Normal detail does the same (a West Africa box, 15 s).
+A small overview pack per country with only the coarse levels (a second `tier`; the pack
+header already has one) would make both take about a second. That is a new item to shape.
+Counting in a Web Worker (candidate 1 below) matters less than thought: the longest freeze
+during those counts was 146 ms on the slowed phone, under INP's 200 ms.
+
+Candidates still open:
 1. **Count in a Web Worker,** so a large shape or a first download never blocks taps (M).
-2. **Load the no-data layer after the map is up,** or tile it (S).
-3. **Load Terra Draw only for mouse drawing;** touch screens no longer use it (S).
-4. **Slim the catalogue at start-up** to what the first view needs (S).
-5. **Preload the count's font and preconnect to the tile host** (S).
-6. **Smaller first parts for big countries** (M, a pack rebuild).
-7. **Self-host the basemap** (M; mostly for reliability, so the map still draws if
+2. **Smaller first parts for big countries** (M, a pack rebuild), or the overview tier above.
+3. **Self-host the basemap** (M; mostly for reliability, so the map still draws if
    OpenFreeMap is down).
 
 ## Notes on Inbox items

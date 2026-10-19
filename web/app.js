@@ -17,9 +17,13 @@ const BACKEND = "Data: downloaded packs";
 // The catalogue loads at once (a few KB); the packs come with the first polygon.
 const staticData = TallyStatic.load(DATA_URL);
 const fmtMB = (b) => (b > 0 && b < 5e4 ? "<0.1" : (b / 1e6).toFixed(b >= 1e7 ? 0 : 1));
+// index.html preconnects to this host, so keep the two in step.
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
-const CAMEROON_CENTER = [12.35, 5.7];
-const CAMEROON_ZOOM = 5.4;
+// The map opens on the view the data's bbox will fit, so a first visit loads one set of
+// tiles: it used to open on Cameroon and jump to the world once the manifest came, which
+// fetched and drew Cameroon's tiles for nothing (F-25). The bbox of every country; a build
+// of fewer countries still opens here and then fits its own.
+const START_BOUNDS = [[-180, -55.9], [180, 84.1]];
 
 // Sequential ramp, light -> dark (ColorBrewer PuRd, with the two palest steps dropped so
 // the light end stays visible on the basemap's beige and green). Index = log10(density).
@@ -138,8 +142,8 @@ function setStatus(text, isError = false) {
 const map = new maplibregl.Map({
   container: "map",
   style: BASEMAP_STYLE,
-  center: CAMEROON_CENTER,
-  zoom: CAMEROON_ZOOM,
+  bounds: START_BOUNDS,
+  fitBoundsOptions: { padding: panelPadding() },
   // The attribution control is added once the manifest says what to credit.
   attributionControl: false,
 });
