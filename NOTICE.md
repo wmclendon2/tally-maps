@@ -16,7 +16,7 @@ credit the sources below.
 | Meta High Resolution Settlement Layer (HRSL), via the Humanitarian Data Exchange | Population, 30 m | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Data for Good at Meta and CIESIN, Columbia University — High Resolution Population Density Maps |
 | [WorldPop](https://www.worldpop.org) | Population, 100 m (where Meta has no data) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | WorldPop (www.worldpop.org), University of Southampton |
 | [geoBoundaries](https://www.geoboundaries.org) | Country outlines for clipping and display | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Runfola et al. (2020), geoBoundaries, PLoS ONE 15(4): e0231866 |
-| [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, outlines for five territories (HKG, MAC, JEY, VIR, PCN), the coverage map | Public domain | Made with Natural Earth |
+| [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, outlines for six territories (HKG, MAC, JEY, VIR, PCN, GRL), the coverage map | Public domain | Made with Natural Earth |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright), served by [OpenFreeMap](https://openfreemap.org) | Basemap | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/) | © OpenStreetMap contributors, OpenFreeMap |
 
 **Derived data:**

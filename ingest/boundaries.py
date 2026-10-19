@@ -44,7 +44,18 @@ NE10_SOURCE = "Natural Earth 10m admin 0 map units"
 # misses (HKG loses 1.28 M people unbuffered, 0.4 k at 0.05), minus every other unit. That
 # cuts the land borders back to Natural Earth's and leaves out the 662 k people of western
 # Hong Kong that Macau's 1-degree tile also holds, and Guernsey and France in Jersey's.
-ADM0_FROM_NATURAL_EARTH = {"HKG": 0.05, "MAC": 0.05, "JEY": 0.05, "VIR": 0.05, "PCN": 0.05}
+# Greenland's geoBoundaries coast runs inland of its towns (Nuuk 0.18 deg outside it) and
+# keeps 265 of WorldPop's 55,581 people; WorldPop's raster holds no one in Canada, so its
+# unit is grown far enough to take every coastal pixel at that latitude, where a degree
+# of longitude is under 40 km (2026-10-18: 48.2 k at 0.05, 55.3 k at 0.2, all at 0.5).
+ADM0_FROM_NATURAL_EARTH = {
+    "HKG": 0.05,
+    "MAC": 0.05,
+    "JEY": 0.05,
+    "VIR": 0.05,
+    "PCN": 0.05,
+    "GRL": 0.5,
+}
 
 
 def boundary_path(country: str, adm: int = 0) -> Path:

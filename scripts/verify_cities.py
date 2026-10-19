@@ -508,7 +508,9 @@ def main(
     country: Annotated[
         list[str] | None, typer.Option(help="Limit to these ISO3 codes; default every built one")
     ] = None,
-    source: Annotated[str, typer.Option(help="Data source key")] = "meta_hrsl",
+    source: Annotated[
+        str | None, typer.Option(help="Data source key; default every source's packs")
+    ] = None,
     packs: Annotated[Path | None, typer.Option(help="Pack directory (default data/packs)")] = None,
     resolution: Annotated[int, typer.Option(help="H3 resolution for the city boxes")] = 8,
     radius_km: Annotated[float, typer.Option(help="Half-width of the box around each city")] = 25.0,
@@ -530,7 +532,7 @@ def main(
     show: Annotated[int, typer.Option(help="Rows of per-city detail to print")] = 20,
     offline: Annotated[bool, typer.Option(help="Reference and geometry only; no packs")] = False,
 ) -> None:
-    if source not in SOURCES:
+    if source is not None and source not in SOURCES:
         raise typer.BadParameter(f"unknown source {source!r}; have {list(SOURCES)}")
     if not REFERENCE.exists():
         raise typer.BadParameter(f"missing reference {REFERENCE}")
@@ -553,18 +555,19 @@ def main(
     from packstore import PackStore
 
     store = PackStore(packs) if packs else PackStore()
-    sources = {e["source"] for e in store.entries.values()}
-    if source not in sources:
-        raise typer.BadParameter(f"no {source} packs; have {sorted(sources)}")
-    built = {c.upper() for c, e in store.entries.items() if e["source"] == source}
+    source_of = {c.upper(): e["source"] for c, e in store.entries.items()}
+    if source is not None and source not in source_of.values():
+        raise typer.BadParameter(f"no {source} packs; have {sorted(set(source_of.values()))}")
+    built = {c for c, s in source_of.items() if source is None or s == source}
     if wanted:
         missing = wanted - built
         if missing:
             raise typer.BadParameter(f"no pack built for: {sorted(missing)}")
         built = wanted
-    base = store.base_resolution(source)
+    used = sorted({source_of[c] for c in built})
+    base = min(store.base_resolution(s) for s in used)
     if resolution > base:
-        raise typer.BadParameter(f"res {resolution} is finer than {source}'s base res {base}")
+        raise typer.BadParameter(f"res {resolution} is finer than the base res {base} of {used}")
 
     cities = load_cities(countries=built, min_pop=min_pop)
     if limit:
@@ -585,7 +588,7 @@ def main(
     ok = report(
         results,
         aggregate(results),
-        source=source,
+        source=", ".join(used),
         resolution=resolution,
         min_p=min_p,
         min_contrast=min_contrast,

@@ -202,7 +202,9 @@ def report(
 @app.command()
 def main(
     country: Annotated[str, typer.Option(help="ISO3 code, e.g. CMR")],
-    source: Annotated[str, typer.Option(help="Data source key")] = "meta_hrsl",
+    source: Annotated[
+        str | None, typer.Option(help="Data source key; default the pack's own")
+    ] = None,
     resolution: Annotated[
         int | None, typer.Option(help="H3 resolution; default base-2, a good accuracy/cost trade")
     ] = None,
@@ -214,6 +216,10 @@ def main(
     from packstore import PackStore
 
     iso3 = country.upper()
+    store = PackStore(packs) if packs else PackStore()
+    if iso3 not in store.entries:
+        raise typer.BadParameter(f"no pack for {iso3}; build it with scripts/build_packs.py")
+    source = source or store.entries[iso3]["source"]
     if source not in SOURCES:
         raise typer.BadParameter(f"unknown source {source!r}; have {list(SOURCES)}")
     base = SOURCES[source].base_resolution
@@ -222,9 +228,6 @@ def main(
     res = resolution if resolution is not None else max(MIN_RESOLUTION, base - 2)
     if not MIN_RESOLUTION <= res <= base:
         raise typer.BadParameter(f"resolution must be in [{MIN_RESOLUTION}, {base}]")
-    store = PackStore(packs) if packs else PackStore()
-    if iso3 not in store.entries:
-        raise typer.BadParameter(f"no pack for {iso3}; build it with scripts/build_packs.py")
 
     geom = load_outline(iso3)
     minx, _, maxx, _ = geom.bounds

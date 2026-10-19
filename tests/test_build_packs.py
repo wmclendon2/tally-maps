@@ -26,10 +26,12 @@ from build_packs import (
     decode,
     merge,
     pack_bytes,
+    parent_at,
     prune,
     split,
     tidy,
     unpack,
+    whole_people,
     write_catalog,
 )
 
@@ -94,6 +96,64 @@ def test_coarse_parent_matches_h3():
     assert [h3.int_to_str(int(g)) for g in got] == [h3.cell_to_parent(c, 3) for c in cells]
 
 
+def test_parent_at_matches_h3():
+    cells = [h3.latlng_to_cell(la, ln, 9) for la, ln, _ in BRA[:50]]
+    ints = np.array([h3.str_to_int(c) for c in cells], np.uint64)
+    for res in range(3, 10):
+        got = [h3.int_to_str(int(g)) for g in parent_at(ints, res)]
+        assert got == [h3.cell_to_parent(c, res) for c in cells]
+
+
+# A thinly spread place: 40 people over 400 cells, most holding a fraction of one.
+SPARSE = [
+    (rng.uniform(55, 60), rng.uniform(-110, -100), rng.uniform(0.001, 0.2)) for _ in range(400)
+]
+
+
+@pytest.mark.parametrize("points", [CMR, BRA, SPARSE], ids=["CMR", "BRA", "sparse"])
+def test_whole_people_keeps_the_pyramid_and_stays_close(points):
+    real = tidy(pyramid(points))
+    whole = whole_people(real)
+    total = round(sum(p for *_, p in points))
+    for res, (cells, pops) in whole.items():
+        assert np.array_equal(cells, real[res][0])
+        assert np.all(pops == np.round(pops)) and np.all(pops >= 0), f"res {res}: not whole"
+        assert pops.sum() == total, f"res {res}"
+        assert np.abs(pops - real[res][1]).max() < 2, f"res {res}: moved too far"
+        if res > 3:  # the children of every cell hold exactly its people
+            parents, seats = whole[res - 1]
+            g = np.searchsorted(parents, parent_at(cells, res - 1))
+            assert np.array_equal(np.bincount(g, weights=pops, minlength=parents.size), seats)
+
+
+def test_whole_people_puts_a_thin_spread_in_one_cell_and_is_repeatable():
+    """Seven children of 0.1 each: their parent rounds to 1 person, and it goes to the
+    child with the most (or, on a tie, the lowest index), not 0.1 to each."""
+    parent = h3.latlng_to_cell(60.0, -105.0, 8)
+    kids = sorted(h3.str_to_int(c) for c in h3.cell_to_children(parent, 9))
+    for heaviest in (None, 4):
+        pops = np.full(7, 0.1)
+        if heaviest is not None:
+            pops[heaviest] = 0.15
+        cells = np.array(kids, np.uint64)
+        levels = rollup(cells, pops, 9, 3)
+        levels[9] = (cells, pops)
+        whole = whole_people(tidy(merge([levels])))
+        got = whole[9][1]
+        assert got.sum() == 1 and np.count_nonzero(got) == 1
+        assert got[heaviest if heaviest is not None else 0] == 1
+        assert np.array_equal(whole_people(tidy(merge([levels])))[9][1], got)
+
+
+def test_a_thin_spread_shows_no_fractions_in_the_pack():
+    files, entry = build(SPARSE)
+    _, back = read(files[0])
+    for res, (_cells, pops) in back.items():
+        assert np.all(pops >= 1), f"res {res}: a cell with less than one person"
+        assert np.all(pops == np.round(pops)), f"res {res}: a fraction of a person"
+    assert entry["total"] == round(sum(p for *_, p in SPARSE))
+
+
 def test_small_country_is_one_part_that_round_trips():
     files, entry = build()
     assert len(files) == len(entry["parts"]) == 1
@@ -104,7 +164,7 @@ def test_small_country_is_one_part_that_round_trips():
     assert sorted(back) == list(range(3, 10))
     for cells, pops in back.values():
         assert np.all(cells[:-1] < cells[1:]), "sections must stay sorted for binary search"
-        assert pops.astype(np.float64).sum() == pytest.approx(1825.5)
+        assert pops.astype(np.float64).sum() == round(1825.5)  # whole people, every level
     p = entry["parts"][0]
     assert p["sha256"] == hashlib.sha256(files[0]).hexdigest()
     assert p["raw_sha256"] == hashlib.sha256(gzip.decompress(files[0])).hexdigest()
@@ -209,10 +269,11 @@ def test_data_version_skips_worldpop_release_names():
     assert data_version([Path("jey_pop_2020_CN_100m_R2025A_v1.tif")]) == "2020"
 
 
-def test_jersey_comes_from_worldpop_and_is_credited():
+def test_worldpop_countries_come_from_worldpop_and_are_credited():
     from build_packs import attribution, source_for
 
-    assert source_for("jey") == "worldpop_100m"
+    for iso3 in ("jey", "CAN", "GRL"):
+        assert source_for(iso3) == "worldpop_100m"
     assert source_for("CMR") == "meta_hrsl"
     names = [a["name"] for a in attribution({"meta_hrsl", "worldpop_100m"})]
     assert names[:2] == ["Meta Data for Good", "WorldPop"]

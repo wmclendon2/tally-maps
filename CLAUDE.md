@@ -9,13 +9,13 @@ Read it before changing the pipeline, the pack format or the resolver.
 
 - **A static app, no server or database.** `scripts/build_packs.py` turns rasters into
   per-country packs in `data/packs/`; `scripts/build_static.py` writes `dist/` = `web/` +
-  packs + the no-data mask; `web/static.js` answers in the browser. All 196 countries have
-  packs. `ingest/resolve.py` is the Python reference for static.js's resolution rule. (API
-  mode, PostGIS + FastAPI, was retired on 2026-10-15; batch upload, F-02, is planned in the
-  browser.)
+  packs + the no-data mask; `web/static.js` answers in the browser. All 196 Meta countries
+  have packs, plus CAN and GRL from WorldPop. `ingest/resolve.py` is the Python reference
+  for static.js's resolution rule. (API mode, PostGIS + FastAPI, was retired on 2026-10-15;
+  batch upload, F-02, is planned in the browser.)
 - Data: Meta HRSL 30 m via HDX (`ingest/hdx.py`), WorldPop 100 m where Meta has no data
-  (only JEY, `ingest/worldpop_hub.py`), clipped to geoBoundaries ADM0 (Natural Earth for
-  HKG/MAC/JEY/VIR/PCN, `ingest/boundaries.py`). Base H3 res 9, pyramid down to res 3.
+  (CAN, GRL, JEY, `ingest/worldpop_hub.py`), clipped to geoBoundaries ADM0 (Natural Earth for
+  HKG/MAC/JEY/VIR/PCN/GRL, `ingest/boundaries.py`). Base H3 res 9, pyramid down to res 3.
 - Docs: `README.md` (for people without an AI tool: every step a plain command; keep it and
   the `Makefile` in step with CLI flags), `docs/ARCHITECTURE.md`, `docs/VERIFICATION.md`
   (methods and baselines of the checks), `docs/ROADMAP.md`.
@@ -37,6 +37,9 @@ Read it before changing the pipeline, the pack format or the resolver.
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
   `tolerance: 0` on the `population-cells` source (otherwise sub-pixel hexes vanish when
   zoomed out).
+- Packs hold whole people (`build_packs.whole_people`, since 2026-10-18): no cell may show
+  a fraction or "0 people". Keep it in any change to how levels are built; the tests check
+  every level, and every cell's children, sum exactly.
 - Pack format: a format **major** bump makes old readers refuse a pack; additive changes
   bump the minor. Packs are named by content hash; `write_catalog` adds `continent`,
   `cells_by_resolution` and `area_km2` at write time, so those need no pack rebuild.
@@ -69,9 +72,12 @@ Read it before changing the pipeline, the pack format or the resolver.
   `ingest/fetch.py` (curl first, urllib fallback, retries on 408/425/429/5xx). Some proxies
   truncate HTTP/1.1 bodies from urllib with no error; keep curl first.
 - Meta has no file for RUS, CHN, PAK, CAN, GRL, MAR, SDN, SSD, SOM, ESH (and others; see the
-  coverage map). Meta's JEY file has no data over Jersey, so JEY is WorldPop 100 m
-  (`build_packs.SOURCE_FOR`). geoBoundaries has no ADM0 for PRI (`ADM0_FROM_PARENT` takes
-  USA ADM1).
+  coverage map). Meta's JEY file has no data over Jersey. CAN, GRL and JEY are WorldPop
+  100 m (`build_packs.SOURCE_FOR`). Add a WorldPop country with a disputed border only after
+  checking the outline overlaps: Meta's bounding-box files can hold people inside a
+  neighbour's claim (IND's outline takes in Pakistan-administered Kashmir), so both packs
+  would count them. Kosovo is `KOS` at WorldPop, `XKX` at geoBoundaries. geoBoundaries has
+  no ADM0 for PRI (`ADM0_FROM_PARENT` takes USA ADM1).
 - An outline is not proof of data (IND's claims Pakistan-administered Kashmir, FIN's holds
   Aland): the no-data mask keeps an overlap grey unless the pack has >= 5 people/km2 there
   (`CLAIM_SHARE`, `MIN_DENSITY` in `build_static.py`).

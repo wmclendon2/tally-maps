@@ -34,7 +34,8 @@ that every pyramid level sums to the same total, and that the total matches the 
   takes 3 s, Tanzania 3 minutes, and Brazil and South Africa are the slowest because their
   outlines are detailed.
 - Cameroon: polygon 26,619,950, gain 338,993, loss 213,945. An independent database
-  built from the same rasters gave identical figures (2026-10-13).
+  built from the same rasters gave identical figures (2026-10-13). With whole people
+  (2026-10-18): polygon 26,619,953, loss 213,944.
 - Small islands show a large "net border error" at resolution 7 (Seychelles −26%, Mayotte
   −24%, Comoros −14%, Cape Verde −10%) because coarse cell centres fall in the sea. The
   identity still balances.
@@ -43,6 +44,16 @@ that every pyramid level sums to the same total, and that the total matches the 
 
 The first 53 countries passed on 2026-10-13, and the five territories clipped to Natural
 Earth outlines passed when they were added.
+
+Canada and Greenland (WorldPop, 2026-10-18) passed. Both scripts take the source from the
+pack, so no `--source` is needed.
+
+- Canada: polygon 37,434,213, gain 17,520 (USA), loss 592,279. The −1.5% net border
+  error is the jagged Arctic coast at resolution 7, as with the small islands. Clipping
+  the raster dropped only 9,429 of WorldPop's 38,018,401.
+- Greenland: 55,581, with no gain or loss, the raster's whole total. geoBoundaries'
+  outline kept only 265 of them (its coast runs inland of the towns), so Greenland is
+  clipped to Natural Earth's (`ingest/boundaries.py`).
 
 ## City positions
 
@@ -84,6 +95,8 @@ per-country pass with `--min-pop 0`.
 | 2026-09-19, res 8, default min-pop | 100 | 3.8 km | 0.28 | | |
 | 2026-09-19, `--min-pop 0` | 202 | | 0.028 | GIN 7.3 km NE (3 cities) | 0.27 |
 | 2026-10-13, `--min-pop 0`, 53 countries | 248 | 3.0 km | 0.118 | GIN 7.3 km NE | 0.20 |
+| 2026-10-18, `--min-pop 0`, CAN and GRL only | 50 | 1.8 km | 0.476 | CAN 0.5 km N | 0.82 |
+| 2026-10-18, default min-pop, 198 countries | 545 | 3.4 km | 0.487 | LBY 6.7 km SE | 0.32 |
 
 The 2026-10-13 run printed identical output from the packs and from the earlier database.
 The first run
@@ -144,7 +157,18 @@ arrays, and fails over `--max-mb`. It also warns when a country's `area_km2` is 
 script ports `countryResolution` in `static.js`; keep them in step.
 
 First full run, 196 countries: all identical, peak 150 MB (the page alone is 40 MB),
-about 30 s. Before the memory cap, the same stress boxes held 763 MB.
+about 30 s. Before the memory cap, the same stress boxes held 763 MB. With Canada and
+Greenland (198 countries, 2026-10-18): all identical, peak still 150 MB. With whole
+people: all identical, peak 149 MB.
+
+## Whole people
+
+Since 2026-10-18 every cell holds a whole number of people (`whole_people` in
+`build_packs.py`; see ARCHITECTURE.md). After the rebuild of all 198 countries, none of
+their 115,021,057 cells held a fraction or less than one person, and the world total was
+unchanged to the person (5,482,074,121). The 24 coarsest cells over 16.7 million people
+(float32's limit for exact integers) can be a person or two off a whole number. The city
+check was unchanged (545 cities, median 3.4 km, p = 0.487).
 
 ## Plausibility against Natural Earth
 

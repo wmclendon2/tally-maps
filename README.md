@@ -6,7 +6,8 @@ Draw a shape on a map and see how many people live inside it, with a density hea
 
 - **Shape:** draw any polygon. **Radius:** everyone within a distance of a point.
   **Country:** a whole country at once.
-- 196 countries and territories, from 30 m population estimates.
+- 198 countries and territories, from 30 m population estimates (100 m for Canada,
+  Greenland and Jersey).
 - Runs entirely in your browser. Country data downloads on first use and stays available
   offline. Nothing you draw leaves your device.
 - Works on phones and installs as an app (PWA).
@@ -71,7 +72,8 @@ make demo COUNTRIES="KEN TZA UGA"
 The app shows exactly the countries in that build. `docs/img/coverage.json` lists every
 country with data (`available`). `make catalog` lists Meta's catalogue with each
 country's download size. A few countries have no Meta data at all
-(Russia, China, Pakistan, Canada and others; see the map above) and cannot be built.
+(Russia, China, Pakistan and others; see the map above) and cannot be built yet; Canada
+and Greenland are built from WorldPop instead.
 
 Each country is built in parallel with the others; large ones take a few minutes (Brazil
 about 2.5) and need up to ~4 GB of memory each. Most downloads are under 200 MB; the
@@ -138,9 +140,9 @@ coasts, borders and in places that have changed recently.
 | Source | Used for | Licence |
 | --- | --- | --- |
 | [Meta High Resolution Population Density Maps][hrsl] via [HDX][hdx] | Population, 30 m | CC BY 4.0 |
-| [WorldPop](https://www.worldpop.org) | Population, 100 m, where Meta's file has no data (Jersey) | CC BY 4.0 |
+| [WorldPop](https://www.worldpop.org) | Population, 100 m, where Meta has no data (Canada, Greenland, Jersey) | CC BY 4.0 |
 | [geoBoundaries][gb] | Country outlines for clipping | CC BY 4.0 |
-| [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, five territories' outlines | Public domain |
+| [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, six territories' outlines | Public domain |
 | [OpenFreeMap](https://openfreemap.org) / OpenStreetMap | Basemap | ODbL |
 
 All are downloaded from their publishers when you build; none needs an account or key.

@@ -25,7 +25,7 @@ but it is a deliberate choice.
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
 | F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Inbox | L | ★★★ | ✅ | Pack format minor bump |
 | F-09 | Compare two shapes, or one area across data years | Inbox | M | ★★ | ✅ | F-13 for years |
-| F-10 | WorldPop 100 m for countries Meta lacks | Inbox (Jersey done) | M | ★★★ | ✅ | — |
+| F-10 | WorldPop 100 m for countries Meta lacks | Inbox (Jersey, Canada, Greenland done) | M | ★★★ | ✅ | — |
 | F-13 | Data versioning and refresh of saved packs | Inbox | M | ★★ | ✅ | Provenance per pack |
 | F-16 | Embeddable widget for articles | Inbox | M | ★★ | ✅ | F-05 |
 | F-17 | Printable one-page report (PDF) for an area | Inbox | M | ★★ | ✅ | F-04 |
@@ -72,7 +72,7 @@ Performance panel).
 
 A first visit is about 774 KB over the wire before map tiles: MapLibre 276 KB, the no-data
 layer 157 KB, the catalogue 76 KB, fonts 90 KB, h3-js 66 KB, Terra Draw 50 KB, the app
-28 KB. A count then downloads the parts it needs, up to about 4.7 MB each, once.
+28 KB. A count then downloads the parts it needs, up to about 3.4 MB each, once.
 
 Candidates, most likely payoff first:
 1. **Count in a Web Worker,** so a large shape or a first download never blocks taps (M).
@@ -92,7 +92,9 @@ Candidates, most likely payoff first:
 - **F-07:** the extra Meta demographic rasters become more columns in a pack: a format
   minor bump, so old packs keep working.
 - **F-10:** WorldPop countries are pack-only from the start, verified from their packs
-  like every other country.
+  like every other country. Done in batches: Canada and Greenland first (undisputed
+  borders), then small undisputed places, then the disputed-border countries once a check
+  of outline overlaps shows no one is counted twice.
 - **F-13:** builds on provenance per pack, so "which download is this total from?" has an
   answer when Meta replaces a file.
 - **F-26:** waits for feedback: watch a few people open Tally for the first time without
@@ -125,3 +127,5 @@ Candidates, most likely payoff first:
 | F-06 | Whole countries (the Country tab); regions and districts parked | 2026-10-14 |
 | F-12 | Static-only app: the database and API retired, one way to run Tally | 2026-10-15 |
 | F-22 | Who made Tally: a personal project, the author in the copyright line, the address on exported images (contact email left out for now) | 2026-10-15 |
+| F-10 | Canada and Greenland from WorldPop 100 m (198 countries and territories) | 2026-10-18 |
+| — | Whole people in every hexagon: no "0 people" or fractions; packs 35% smaller | 2026-10-18 |

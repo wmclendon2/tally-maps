@@ -71,13 +71,15 @@ FORMAT = (1, 0)
 FIXED = struct.Struct("<4sHHI")  # magic, major, minor, header length
 ALIGN = 8
 SOURCE = "meta_hrsl"
-# Countries whose Meta raster is unusable, built from another source instead. Meta's
-# "Jersey" file (jey_general_2020) has no data over Jersey at all: its 418 k people are
-# Guernsey's and Normandy's, and every pixel on the island is nodata (checked 2026-10-13).
-SOURCE_FOR = {"JEY": "worldpop_100m"}
+# Countries whose Meta raster is unusable or missing, built from another source instead.
+# Meta's "Jersey" file (jey_general_2020) has no data over Jersey at all: its 418 k people
+# are Guernsey's and Normandy's, and every pixel on the island is nodata (checked
+# 2026-10-13). Meta has no file at all for Canada or Greenland, whose borders are
+# undisputed, so no neighbour's pack can hold their people.
+SOURCE_FOR = {"JEY": "worldpop_100m", "CAN": "worldpop_100m", "GRL": "worldpop_100m"}
 PACK_CACHE = DATA_DIR / "packs"
 DEFAULT_COUNTRIES = ["CMR", "CAF"]
-MAX_PART_MB = 16.0  # raw; ~4-5 MB once gzipped
+MAX_PART_MB = 16.0  # raw; ~3 MB once gzipped (whole people compress well)
 # Dates or years in the raster file names: Meta's are "..._2020_geotiff.zip" or
 # "population_bra_northeast_2018-10-01.zip", WorldPop's "jey_pop_2020_CN_100m_R2025A_v1.tif"
 # (whose release, R2025A, is not the data's year: hence no letters either side).
@@ -188,16 +190,65 @@ def tidy(levels: dict) -> dict:
 
 
 # H3 index bits: resolution in 52-55, then 15 three-bit digits with digit r at bit
-# 3 * (15 - r). The ancestor at res 3 keeps digits 1-3 and sets digits 4-15 to 7.
+# 3 * (15 - r). The ancestor at res r keeps digits 1-r and sets digits r+1..15 to 7.
 _RES_BITS = np.uint64(0xF << 52)
-_FINE_DIGITS = np.uint64((1 << 3 * (15 - MIN_RESOLUTION)) - 1)
+
+
+def parent_at(cells: np.ndarray, res: int) -> np.ndarray:
+    """h3.cell_to_parent(c, res) for a whole array at once."""
+    cells = np.asarray(cells, np.uint64)
+    fine = np.uint64((1 << 3 * (15 - res)) - 1)
+    return (cells & ~(_RES_BITS | fine)) | np.uint64(res << 52) | fine
 
 
 def coarse_parent(cells: np.ndarray) -> np.ndarray:
     """h3.cell_to_parent(c, MIN_RESOLUTION) for a whole array at once."""
-    cells = np.asarray(cells, np.uint64)
-    keep = ~(_RES_BITS | _FINE_DIGITS)
-    return (cells & keep) | np.uint64(MIN_RESOLUTION << 52) | _FINE_DIGITS
+    return parent_at(cells, MIN_RESOLUTION)
+
+
+def largest_remainder(
+    quota: np.ndarray, group: np.ndarray, cells: np.ndarray, seats: np.ndarray
+) -> np.ndarray:
+    """Whole numbers near `quota` that sum to `seats[g]` within each group g: every item
+    gets its quota rounded down, then the people left over go one each to the largest
+    remainders. Ties go to the lower H3 index, so a rebuild is identical."""
+    whole = np.floor(quota).astype(np.int64)
+    short = seats - np.bincount(group, weights=whole, minlength=seats.size).astype(np.int64)
+    order = np.lexsort((cells, -(quota - whole), group))
+    g = group[order]
+    rank = np.arange(order.size) - np.searchsorted(g, np.arange(seats.size))[g]
+    whole[order] += rank < short[g]
+    return whole
+
+
+def whole_people(levels: dict) -> dict:
+    """The tidy pyramid in whole people, so no hexagon on the map holds a fraction of one.
+
+    Handed out from the top: the country's rounded total is shared among its res-3 cells,
+    then each cell's whole people among its children, each in proportion to the model's
+    figures by largest remainder. Every level still sums to the same total, and where
+    people live thinly (WorldPop gives a building in the Canadian bush 0.09 of a person)
+    a parent's one person lands in its likeliest child instead of a tenth in each. A cell
+    moves by under 2 people from the model's figure (CAN, USA; 2026-10-18).
+    """
+    top, bottom = min(levels), max(levels)
+    cells, pops = levels[top]
+    pops = pops.astype(np.float64)
+    total = round(float(pops.sum()))
+    share = pops * (total / pops.sum()) if total else np.zeros_like(pops)
+    seats = largest_remainder(share, np.zeros(cells.size, np.int64), cells, np.array([total]))
+    out = {top: (cells, seats)}
+    for res in range(top + 1, bottom + 1):
+        parents, parent_seats = out[res - 1]
+        cells, pops = levels[res]
+        pops = pops.astype(np.float64)
+        g = np.searchsorted(parents, parent_at(cells, res - 1))
+        if g.size and (g.max() >= parents.size or np.any(parents[g] != parent_at(cells, res - 1))):
+            raise ValueError(f"res {res}: a cell has no parent at res {res - 1}")
+        real = np.bincount(g, weights=pops, minlength=parents.size)[g]
+        share = pops * parent_seats[g] / np.where(real > 0, real, 1.0)
+        out[res] = (cells, largest_remainder(share, g, cells, parent_seats))
+    return {res: (cells, seats.astype(np.float64)) for res, (cells, seats) in out.items()}
 
 
 def split(levels: dict, max_raw_bytes: float) -> list[dict]:
@@ -270,7 +321,7 @@ def build_country(
     max_part_mb: float = MAX_PART_MB,
 ) -> tuple[list[bytes], dict]:
     """The gzipped parts and the country's catalogue entry, each part checked by decoding it."""
-    levels = tidy(levels)
+    levels = tidy(whole_people(tidy(levels)))
     base = SOURCES[source].base_resolution
     country_total = float(levels[base][1].sum())
     built = datetime.now(UTC).date().isoformat()

@@ -23,22 +23,34 @@ browser downloads the parts of the packs a question needs and answers it with
 from the Humanitarian Data Exchange. `ingest/hdx.py` finds each country's
 general-population GeoTIFF through the HDX CKAN API and needs no key. Meta covers 196
 countries and territories. Where Meta has no usable file, [WorldPop][worldpop] 100 m is used
-(`ingest/worldpop_hub.py`); so far that is only Jersey, whose Meta file has no data over the
-island. Each pack records its source, so the app can say which one a number came from.
+(`ingest/worldpop_hub.py`): for Canada and Greenland, which Meta has no file for, and
+Jersey, whose Meta file has no data over the island. Each pack records its source, so the app can say which one a number came from.
 
 **Outlines.** Meta's country files cover the country's whole bounding box, not its
 outline. Cameroon's file holds 106 million people, 79.6 million of whom live in Nigeria,
 Chad and other neighbours. Every raster is therefore clipped to the country's
-[geoBoundaries][gb] ADM0 outline (CC BY 4.0; GADM's licence was avoided on purpose). Five
-territories with no usable geoBoundaries outline (HKG, MAC, JEY, VIR, PCN) are clipped to
-Natural Earth's outline, grown slightly to catch the coast and cut at the neighbours
-(`ingest/boundaries.py`).
+[geoBoundaries][gb] ADM0 outline (CC BY 4.0; GADM's licence was avoided on purpose). Six
+territories with no usable geoBoundaries outline (HKG, MAC, JEY, VIR, PCN, GRL) are clipped
+to Natural Earth's outline, grown slightly to catch the coast and cut at the neighbours
+(`ingest/boundaries.py`). Greenland's geoBoundaries coast runs inland of its towns and kept
+265 of its 55,581 people.
 
 **Binning.** `ingest/raster.py` streams the raster window by window. Each populated pixel's
 centre goes into the H3 cell that contains it, at a base resolution of 9 (about 0.1 km²).
 The cells are then rolled up into their parents down to resolution 3 (`ingest/pyramid.py`),
 so every level sums to the same total. Some Meta GeoTIFFs store their strips out of order;
 these are read in file order, which makes Algeria 15 times faster with identical output.
+
+**Whole people.** The models spread people in fractions: WorldPop gives each building in
+rural Canada a share, so most of Canada's finest hexagons held under half a person and the
+map showed coloured hexagons labelled "0 people". So the pyramid is converted to whole
+people before it is packed (`whole_people` in `scripts/build_packs.py`). The country's
+rounded total is shared among its resolution-3 cells, then each cell's whole people among
+its seven children, in proportion to the model's figures, by largest remainder (ties to the
+lower H3 index, so rebuilds are identical). Every level still sums to the same total, every
+cell's children sum to it exactly, and no cell moves by as much as 2 people. Where people
+live thinly, a parent's one person lands in its likeliest child instead of a tenth in each:
+Canada's finest level went from 2.77 million cells to 0.94 million.
 
 ## The counting rule
 
@@ -69,11 +81,11 @@ The resolution is chosen per question (`web/static.js`, with the Python referenc
   each resolution the sorted H3 indexes and float32 populations. The full layout is in the
   `build_packs.py` docstring.
 - **Parts.** Large countries are split into parts by their resolution-3 ancestor, taken in
-  H3 index order and cut at 16 MB of raw data (about 4.5 MB gzipped). A part answers any
+  H3 index order and cut at 16 MB of raw data (about 3 MB gzipped). A part answers any
   cell whose resolution-3 parent is in its `footprint`, so the client knows exactly which
   parts a shape needs with no outlines at all. A first count over São Paulo downloads one
-  part of Brazil, not the whole of it. Brazil has 6 parts, the USA 15 and India 16. All
-  196 countries come to 396 MB.
+  part of Brazil, not the whole of it. Brazil has 6 parts, the USA 13 and India 16. All
+  198 countries come to 269 MB (412 MB before whole people, which compress better).
 - **Names.** Pack files are named by content hash and never change, so hosts and browsers
   can cache them forever.
 
