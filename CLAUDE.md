@@ -117,5 +117,6 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
 - `docs/ROADMAP.md` is the feature pipeline: the maintainer decides what moves. File new
   ideas in Inbox with a first sizing, shape items when asked, and record shipped items with
   the date.
-- Not built yet: WorldPop 100 m for the countries Meta lacks (F-10), parity polygons outside
-  Africa/Brazil, CI.
+- Not built yet: WorldPop 100 m for the rest of the countries Meta lacks (F-10, batches in
+  the roadmap; disputed borders wait on the overlap audit, F-30), parity polygons outside
+  Africa/Brazil (F-28), CI (F-27).
