@@ -1,0 +1,37 @@
+# Copyright (c) 2026 Woody McLendon
+# SPDX-License-Identifier: MIT
+#
+# Lint and tests on every push and pull request: `make check` on a clean machine, with no
+# data/, dist/ or packs. The browser checks (browser_parity.py, browser_countries.py) need
+# Chrome and a built dist/, so they are not run here (ROADMAP F-27, level 2).
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.13.0"
+          python-version: "3.12"
+          enable-cache: true
+      # --locked fails if pyproject.toml changed without uv.lock.
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q

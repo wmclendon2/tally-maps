@@ -92,7 +92,7 @@ largest are India (780 MB) and the USA (1.1 GB). All of Meta's countries come to
 | `make serve` | `python3 -m http.server 8081 --directory dist --bind 127.0.0.1` | Serves `dist/` locally |
 | `make demo` | `make site` then `make serve` | |
 | `make test` | `uv run pytest -q` | Runs the tests (no downloads needed) |
-| `make check` | ruff, then the tests | Style and tests |
+| `make check` | ruff, then the tests | Style and tests (GitHub runs the same on every push) |
 
 `COUNTRIES="..."` picks the countries for `packs`, `site`, `demo` and `verify`, and
 `PORT=8090` changes the port for `serve` and `demo`.

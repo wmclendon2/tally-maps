@@ -32,7 +32,7 @@ but it is a deliberate choice.
 | F-18 | Public batch API for developers | Parked | L | ★★ | ⚠️ | — |
 | F-25 | Make the app faster, first visit and large shapes | Shaped | M | ★★ | ✅ | — |
 | F-26 | First-visit welcome: a one-time hint, or open on an example count | Inbox | S | ★ | ✅ | Feedback from first-time users |
-| F-27 | Continuous integration: tests and lint on every push | Shaped | S–M | ★★ | ✅ | — |
+| F-27 | Continuous integration: tests and lint on every push | Shaped (level 1 shipped) | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
 | F-30 | Outline-overlap audit: no one counted in two countries | Inbox | S–M | ★★ | ✅ | — |
@@ -185,7 +185,10 @@ Candidates still open:
   `workflow` scope (`gh auth refresh -s workflow`, run by the owner, if the push is
   refused). The workflow file carries the copyright and SPDX header. "Require checks to
   pass before merging" is a repo setting the owner switches on.
-- **Plan:** level 1 first; level 2 later.
+- **Level 1 shipped 2026-10-20:** `.github/workflows/check.yml`, on every push and pull
+  request; actions pinned by commit hash, uv 0.13.0, Python 3.12, read-only. Checked by a
+  deliberately failing test on a throwaway branch (1 failed, 150 passed; the branch is
+  deleted). Level 2 waits for a browser-side change such as F-02.
 
 ## Notes on Inbox items
 
@@ -306,3 +309,4 @@ Candidates still open:
 | —    | favicon.ico, apple-touch-icon.png, robots.txt and sitemap.xml at the site root                                                        | 2026-10-16 |
 | F-10 | Canada and Greenland from WorldPop 100 m (198 countries and territories)                                                              | 2026-10-18 |
 | —    | Whole people in every hexagon: no "0 people" or fractions; packs 35% smaller                                                          | 2026-10-18 |
+| F-27 | Continuous integration, level 1: lint and tests on every push and pull request | 2026-10-20 |

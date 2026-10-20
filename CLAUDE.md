@@ -120,4 +120,7 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
   the date.
 - Not built yet: WorldPop 100 m for the rest of the countries Meta lacks (F-10, batches in
   the roadmap; disputed borders wait on the overlap audit, F-30), parity polygons outside
-  Africa/Brazil (F-28), CI (F-27).
+  Africa/Brazil (F-28), the browser checks in CI (F-27 level 2).
+- CI: `.github/workflows/check.yml` runs `make check`'s steps on every push and pull
+  request (no data needed). Keep the actions pinned by commit hash; a push that changes a
+  workflow needs the `workflow` scope on the GitHub login.
