@@ -168,7 +168,7 @@ How the checks work, and the results so far: [docs/VERIFICATION.md](docs/VERIFIC
 | `web/` | The app: MapLibre, Terra Draw, h3-js. No build step |
 | `reference/` | Small checked-in data: city locations, continents |
 | `tests/` | `pytest` suite |
-| `docs/` | Architecture, verification, roadmap |
+| `docs/` | Architecture, verification, data sources, roadmap |
 
 ## Roadmap
 

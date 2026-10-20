@@ -23,7 +23,7 @@ but it is a deliberate choice.
 | F-04 | Export results (CSV / GeoJSON) | Inbox | S | ★★ | ✅ | — |
 | F-05 | Shareable link to a shape (in the URL fragment) | Inbox | S | ★★ | ✅ | — |
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
-| F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Inbox | L | ★★★ | ✅ | Pack format minor bump |
+| F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Parked | L | ★★★ | ✅ | Pack format minor bump |
 | F-09 | Compare two shapes, or one area across data years | Inbox | M | ★★ | ✅ | F-13 for years |
 | F-10 | WorldPop 100 m for countries Meta lacks | Shaped (Jersey, Canada, Greenland done) | M | ★★★ | ✅ | F-30 for disputed borders |
 | F-13 | Data versioning and refresh of saved packs | Inbox | M | ★★ | ✅ | F-29 |
@@ -32,11 +32,13 @@ but it is a deliberate choice.
 | F-18 | Public batch API for developers | Parked | L | ★★ | ⚠️ | — |
 | F-25 | Make the app faster, first visit and large shapes | Shaped | M | ★★ | ✅ | — |
 | F-26 | First-visit welcome: a one-time hint, or open on an example count | Inbox | S | ★ | ✅ | Feedback from first-time users |
-| F-27 | Continuous integration: tests and lint on every push | Inbox | S–M | ★★ | ✅ | — |
+| F-27 | Continuous integration: tests and lint on every push | Shaped | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
 | F-30 | Outline-overlap audit: no one counted in two countries | Inbox | S–M | ★★ | ✅ | — |
 | F-31 | "New version available" notice for a tab left open | Inbox | S | ★ | ✅ | — |
+| F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
+| F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
@@ -154,6 +156,31 @@ Candidates still open:
 3. **Self-host the basemap** (M; mostly for reliability, so the map still draws if
    OpenFreeMap is down).
 
+### F-27 Continuous integration
+- **Why:** today nothing runs unless someone runs `make check` and the browser checks by
+  hand. CI runs them on GitHub's machines for every push to `wmclendon2/tally-maps` and
+  every pull request: a tick or a cross on each commit, an email on failure, outside
+  contributions checked before merging, and a clean machine that catches anything that
+  only works because of local files or caches. Free for a public repo. It checks only.
+- **Level 1, on every push and pull request (S):** a GitHub Actions workflow that installs
+  uv and Python 3.12, runs `uv sync --locked`, `ruff check`, `ruff format --check` and
+  `pytest`. The 150 tests take about 2 s, need no data files and fake their network calls,
+  and lint is clean (2026-10-19), so the first run should pass. It includes the
+  shell-version check.
+- **Level 2, browser checks (M), by hand from GitHub or weekly, not on every push:**
+  download CMR and CAF from HDX and their geoBoundaries outlines, build the packs and
+  `dist/`, install headless Chromium, run `browser_parity.py` and `browser_countries.py`.
+  About 5–10 min a run; fails when HDX or geoBoundaries is slow. Cache the downloads (Meta's
+  files no longer change, so the cache rarely goes stale). Worth doing when a browser-side
+  change such as F-02 makes it pay.
+- **Not in CI:** the full 198-country build (6.3 GB of raw data, ~28 min locally), checks
+  of every country.
+- **Snags:** pushing a file under `.github/workflows/` needs a login with GitHub's
+  `workflow` scope (`gh auth refresh -s workflow`, run by the owner, if the push is
+  refused). The workflow file carries the copyright and SPDX header. "Require checks to
+  pass before merging" is a repo setting the owner switches on.
+- **Plan:** level 1 first; level 2 later.
+
 ## Notes on Inbox items
 
 - **F-04:** PNG export (Save image) shipped 2026-09-18; this item is the data formats,
@@ -161,17 +188,15 @@ Candidates still open:
 - **F-06:** needs ADM1/ADM2 outlines from geoBoundaries (same licence) as a light vector
   layer per country; clicking an area runs the normal shape query on its outline. Whole
   countries already work through the Country tab.
-- **F-07:** the extra Meta demographic rasters become more columns in a pack: a format
-  minor bump, so old packs keep working.
+- **F-07:** parked 2026-10-19: not wanted for now (maintainer's call). If revived, the
+  extra demographic rasters become more columns in a pack: a format minor bump, so old
+  packs keep working.
 - **F-13:** builds on F-29, so "which download is this total from?" has an answer when
   Meta replaces a file.
 - **F-26:** waits for feedback: watch a few people open Tally for the first time without
   help. If they find **Draw a shape** at once, drop it. Two shapes: a bubble by **Draw a
   shape** shown once (remembered on the device), or open on an example already counted
   (Cameroon, as on the link-preview card), which downloads data before anyone asks.
-- **F-27:** run `make check` (lint and tests, including the shell-version check) on every
-  push; the browser checks (`browser_parity.py`, `browser_countries.py`) need Chrome and a
-  build, so perhaps on a small build or by hand before a release.
 - **F-28:** `scripts/static_parity.py` covers Africa and Brazil only. Add a USA and an
   India shape, a European border, a Greenland coast, and Detroit–Windsor, the first border
   between a Meta country and a WorldPop one.
@@ -184,6 +209,37 @@ Candidates still open:
 - **F-31:** a tab keeps the version it loaded until it is reloaded. Show a small "New
   version available, reload" notice when a new service worker takes over, or when the
   catalogue changes.
+- **F-32:** for the maintainer's own understanding, and to inform whether Tally should
+  eventually move to WorldPop altogether now that Meta's maps are no longer updated
+  (background: [DATA_SOURCES.md](DATA_SOURCES.md)). A script beside `verify_country.py`
+  builds both sources' cells for one country on the same grid and outline, and compares
+  national totals (with a UN or census figure as a third reference), agreement by place
+  at fine, district and regional levels, the people each finds where the other has none,
+  the urban–rural split and totals around cities, plus a difference map. Use WorldPop's
+  map for the same year as each Meta file, and compare at district level and coarser
+  rather than at the finest level (30 m vs 100 m). Countries: a mix such as Cameroon, a
+  dense one (Bangladesh or Nigeria), one with an old census (DR Congo), a European one
+  (Switzerland), a small island, and the USA near Detroit. Results go in
+  `docs/VERIFICATION.md`. Effort: S for the script, plus downloads and compute per country.
+  GHS-POP could be added as an independent third view.
+- **F-33:** a continent entry at the head of each continent group in the Country tab.
+  The total is free: the sum of the catalogue's country totals (`continent` is already
+  there), exact and with no download. The map is not: it would download every pack of the
+  continent today (Asia 94 MB, Africa 50 MB, North America 48 MB). It needs the overview
+  tier from F-25 (coarse levels only, one file per continent): continents hold 960 to
+  2,806 cells at resolution 3 and 4,676 to 14,636 at resolution 4, so the world's
+  resolutions 3–4 come to well under 1 MB gzipped, and the same files speed up the Country
+  tab for India and the USA. Totals are only honest with every country in: missing today
+  are about 40% of Asia (China, Pakistan, Iran, Myanmar…), 25% of Europe (Russia,
+  Ukraine), 8% of Africa (Sudan, Morocco, Somalia, South Sudan, Western Sahara), 7% of
+  South America (Venezuela), 2% of North America (Cuba and small islands), so Africa, the
+  Americas and Oceania could ship first with a "not included" line, Asia and Europe after
+  F-10 (or a move to WorldPop, F-32). Also: Natural Earth's continents by whole country
+  (Russia in Europe, Turkey in Asia, Egypt in Africa), said in the app; Oceania and North
+  America cross the 180° meridian (fitting the view, and `verify_country.py` refuses
+  it); the level rule goes into `ingest/resolve.py` and `static.js` together, with
+  parity; the answer has the same shape as a country's; overview files kept in IndexedDB
+  for offline use. Effort: M for the overview tier, then S for continents.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 

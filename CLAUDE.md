@@ -18,7 +18,8 @@ Read it before changing the pipeline, the pack format or the resolver.
   HKG/MAC/JEY/VIR/PCN/GRL, `ingest/boundaries.py`). Base H3 res 9, pyramid down to res 3.
 - Docs: `README.md` (for people without an AI tool: every step a plain command; keep it and
   the `Makefile` in step with CLI flags), `docs/ARCHITECTURE.md`, `docs/VERIFICATION.md`
-  (methods and baselines of the checks), `docs/ROADMAP.md`.
+  (methods and baselines of the checks), `docs/DATA_SOURCES.md` (Meta vs WorldPop and the
+  alternatives, as of 2026-10-19), `docs/ROADMAP.md`.
 
 ## Invariants (easy to break, hard to notice)
 
