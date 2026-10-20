@@ -38,6 +38,7 @@ but it is a deliberate choice.
 | F-30 | Outline-overlap audit: no one counted in two countries | Inbox | S–M | ★★ | ✅ | — |
 | F-31 | "New version available" notice for a tab left open | Inbox | S | ★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
+| F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
@@ -244,6 +245,17 @@ Candidates still open:
   it); the level rule goes into `ingest/resolve.py` and `static.js` together, with
   parity; the answer has the same shape as a country's; overview files kept in IndexedDB
   for offline use. Effort: M for the overview tier, then S for continents.
+- **F-34:** language and people-group areas are the hard real-world shapes (multipolygons,
+  holes, coastlines, areas across borders, whole-country areas) and what upload (F-02)
+  users will bring. Use open, CC BY datasets only: Glottography's digitised Atlas of the
+  World's Languages (6,992 areas, github.com/glottography/asher2007world) and IMB's
+  peoplegroups.org polygons (12,384 areas, a public ArcGIS service). (1) A handful of them,
+  credited, as parity shapes (F-28) and F-02 test files. (2) A load test: every polygon
+  through `ingest/resolve.py` and the packs, for time per country and the shapes that hit
+  the 40,000-cell limit. (3) Agreement between sources for the same language (joined by
+  ISO 639-3 or Glottocode). A first trial counted 600 IMB areas in Cameroon, Kenya and
+  Brazil in about 30 s. Licensed polygon sets (WLMS, Ethnologue) never go in the repo;
+  with F-02, licence holders count their own files on their own device.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
