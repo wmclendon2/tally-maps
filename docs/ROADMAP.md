@@ -40,6 +40,7 @@ but it is a deliberate choice.
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
+| F-35 | Detail limits: measure the cost and accuracy of more cells | Inbox | S (M if it leads to a change) | ★★ | ✅ | After F-34 |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
@@ -256,37 +257,52 @@ Candidates still open:
   ISO 639-3 or Glottocode). A first trial counted 600 IMB areas in Cameroon, Kenya and
   Brazil in about 30 s. Licensed polygon sets (WLMS, Ethnologue) never go in the repo;
   with F-02, licence holders count their own files on their own device.
+- **F-35:** Normal uses the finest level whose cover stays within 4,000 cells
+  (`AUTO_TARGET_CELLS`); Fine is one level finer (~7x, so at most ~28,000); the 40,000
+  cap (`MAX_CELLS_LIMIT`) is a safety bound that refuses rather than answer coarser, and
+  also bounds one query's memory. So in the app the cap rarely binds (thin or ragged
+  shapes, such as the language areas of F-34, might), and the real limit is the 4,000
+  target: it sets both the map's detail and the edge error of the total (each hexagon
+  counts by its centre; Canada at resolution 7: -1.5%). Measure, on desktop and the
+  slowed phone of F-25, at 4k, 28k, 40k, 100k and 200k cells: polyfill time, lookup
+  time, memory against `MEMORY_BUDGET`, and map drawing (downloads do not change: parts
+  hold every level). Measure what it gains: how the total moves between levels for a
+  city, a district, a language area and a country-sized box. Then decide: keep, raise the
+  cap, offer a third level (`MAX_DETAIL` already allows 2), raise the target, or count at
+  a finer level than is drawn (a more accurate total without drawing more hexagons).
+  Any change goes into `ingest/resolve.py` and `static.js` together, with
+  `browser_parity.py`.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
 ## Shipped
 
-| ID | Feature | Date |
-| --- | --- | --- |
-| — | Save image: a PNG of the map and the count, with credits | 2026-09-18 |
-| — | Install as an app (PWA); the app shell opens offline | 2026-09-18 |
-| — | Static demo with no server (Cameroon and the Central African Republic) | 2026-09-23 |
-| — | Offline country packs, downloaded on demand | 2026-10-07 |
-| F-14 | Fix: the heatmap vanished when zoomed out | 2026-10-13 |
-| F-15 | Fix: Fine looked disabled after it was picked | 2026-10-13 |
-| — | Libraries and fonts vendored; no third-party CDN | 2026-10-13 |
-| — | All 196 countries and territories (Jersey from WorldPop 100 m) | 2026-10-13 |
-| F-11 | Memory cap: one level per part, least recently used out (763 MB → 150 MB peak) | 2026-10-13 |
-| — | Country picker: whole-country population, area and density | 2026-10-13 |
-| — | Saved countries grouped by continent, with Save all for offline use | 2026-10-13 |
-| F-08 | Radius around a point; metric and imperial units | 2026-10-13 |
-| — | Panel redesign: Shape / Radius / Country tabs | 2026-10-13 |
-| F-03 | Phones: crosshair drawing, folding bottom sheet | 2026-10-14 |
-| F-20 | The ? sheet becomes About Tally | 2026-10-14 |
-| F-19 | New shapes and circles zoom to fill the map | 2026-10-14 |
-| — | Tap a hexagon for its own estimate | 2026-10-14 |
-| F-23 | A × on the count replaces the Clear button | 2026-10-14 |
-| F-21 | The radius moves to a round number when the units change | 2026-10-14 |
-| F-06 | Whole countries (the Country tab); regions and districts parked | 2026-10-14 |
-| F-12 | Static-only app: the database and API retired, one way to run Tally | 2026-10-15 |
+| ID   | Feature                                                                                                                               | Date       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| —    | Save image: a PNG of the map and the count, with credits                                                                              | 2026-09-18 |
+| —    | Install as an app (PWA); the app shell opens offline                                                                                  | 2026-09-18 |
+| —    | Static demo with no server (Cameroon and the Central African Republic)                                                                | 2026-09-23 |
+| —    | Offline country packs, downloaded on demand                                                                                           | 2026-10-07 |
+| F-14 | Fix: the heatmap vanished when zoomed out                                                                                             | 2026-10-13 |
+| F-15 | Fix: Fine looked disabled after it was picked                                                                                         | 2026-10-13 |
+| —    | Libraries and fonts vendored; no third-party CDN                                                                                      | 2026-10-13 |
+| —    | All 196 countries and territories (Jersey from WorldPop 100 m)                                                                        | 2026-10-13 |
+| F-11 | Memory cap: one level per part, least recently used out (763 MB → 150 MB peak)                                                        | 2026-10-13 |
+| —    | Country picker: whole-country population, area and density                                                                            | 2026-10-13 |
+| —    | Saved countries grouped by continent, with Save all for offline use                                                                   | 2026-10-13 |
+| F-08 | Radius around a point; metric and imperial units                                                                                      | 2026-10-13 |
+| —    | Panel redesign: Shape / Radius / Country tabs                                                                                         | 2026-10-13 |
+| F-03 | Phones: crosshair drawing, folding bottom sheet                                                                                       | 2026-10-14 |
+| F-20 | The ? sheet becomes About Tally                                                                                                       | 2026-10-14 |
+| F-19 | New shapes and circles zoom to fill the map                                                                                           | 2026-10-14 |
+| —    | Tap a hexagon for its own estimate                                                                                                    | 2026-10-14 |
+| F-23 | A × on the count replaces the Clear button                                                                                            | 2026-10-14 |
+| F-21 | The radius moves to a round number when the units change                                                                              | 2026-10-14 |
+| F-06 | Whole countries (the Country tab); regions and districts parked                                                                       | 2026-10-14 |
+| F-12 | Static-only app: the database and API retired, one way to run Tally                                                                   | 2026-10-15 |
 | F-22 | Who made Tally: a personal project, the author in the copyright line, the address on exported images (contact email left out for now) | 2026-10-15 |
-| — | Every count of people says "(est.)"; About opens with "calculates an estimate" | 2026-10-16 |
-| — | Link previews: Open Graph tags and a Cameroon heatmap card | 2026-10-16 |
-| — | favicon.ico, apple-touch-icon.png, robots.txt and sitemap.xml at the site root | 2026-10-16 |
-| F-10 | Canada and Greenland from WorldPop 100 m (198 countries and territories) | 2026-10-18 |
-| — | Whole people in every hexagon: no "0 people" or fractions; packs 35% smaller | 2026-10-18 |
+| —    | Every count of people says "(est.)"; About opens with "calculates an estimate"                                                        | 2026-10-16 |
+| —    | Link previews: Open Graph tags and a Cameroon heatmap card                                                                            | 2026-10-16 |
+| —    | favicon.ico, apple-touch-icon.png, robots.txt and sitemap.xml at the site root                                                        | 2026-10-16 |
+| F-10 | Canada and Greenland from WorldPop 100 m (198 countries and territories)                                                              | 2026-10-18 |
+| —    | Whole people in every hexagon: no "0 people" or fractions; packs 35% smaller                                                          | 2026-10-18 |
