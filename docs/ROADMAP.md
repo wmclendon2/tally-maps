@@ -38,8 +38,8 @@ but it is a deliberate choice.
 | F-30 | Outline-overlap audit: no one counted in two countries | Inbox | S–M | ★★ | ✅ | — |
 | F-31 | "New version available" notice for a tab left open | Inbox | S | ★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
-| F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
+| F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
