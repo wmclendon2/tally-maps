@@ -1,8 +1,8 @@
 # Verifying the data
 
-Four checks, from "is the total right?" to "are people in the right places?". All of them
-read the built packs in `data/packs/` (or a built `dist/`); `make verify`, `make parity`
-and `make countries-check` run them.
+Five checks, from "is the total right?" to "are people in the right places?". They read
+the built packs in `data/packs/` (or a built `dist/`), and the overlap audit the rasters;
+`make verify`, `make parity`, `make countries-check` and `make overlaps` run them.
 
 | Check | Script | Catches |
 | --- | --- | --- |
@@ -10,6 +10,7 @@ and `make countries-check` run them.
 | City positions | `verify_cities.py` | Shifted, flipped or misregistered rasters |
 | Browser parity | `browser_parity.py` | `static.js` drifting from `ingest/resolve.py` |
 | Country picker and memory | `browser_countries.py` | Wrong country totals in the browser, memory growth |
+| Outline overlaps | `audit_overlaps.py` | People counted in two countries where their outlines overlap |
 
 ## Country totals
 
@@ -161,6 +162,53 @@ First full run, 196 countries: all identical, peak 150 MB (the page alone is 40 
 about 30 s. Before the memory cap, the same stress boxes held 763 MB. With Canada and
 Greenland (198 countries, 2026-10-18): all identical, peak still 150 MB. With whole
 people: all identical, peak 149 MB.
+
+## Outline overlaps
+
+```bash
+uv run python scripts/audit_overlaps.py [--country XXX] [--candidate XXX] [--workers N]
+```
+
+Each pack keeps the raster pixels whose centre lies inside its country's outline. Where two
+outlines overlap, a pixel there is inside both, and Meta's files cover each country's
+bounding box, so a neighbour's file usually holds the same people: both packs count them.
+`verify_country.py` cannot see this, since each country reconciles exactly with itself.
+
+The audit finds every pair of built outlines that overlap (each outline split into its
+polygons, so only pieces whose boxes meet are intersected), then reads each country's own
+raster inside its overlaps with the build's rule: pixel centre inside, the same valid-pixel
+test. Each raster is read once for all of its country's overlaps, since the rasters are
+strips inside zips and a sliver along a long border spans most of the country's rows.
+`min(a, b)` of the two sides is the double count: exact when both rasters are the same map
+(Meta's are cut from one global map; in 50 of the 115 pairs over 100 people the two sides
+agree within 1%), an estimate where they differ in scaling or vintage. `--candidate`
+checks a country not built yet against the built ones, before its pack is added. It exits
+1 when a pair counts more than `--fail-above` (default 1,000) people twice; the results go
+to `data/audit/overlaps.json`.
+
+**2026-10-20, all 198 countries** (65 min with 7 workers): 217 overlapping pairs, 161 with
+people in both rasters, **1,673,012 people counted twice** (0.03% of all packs' people),
+in 119 countries; 85 pairs over 1,000, 25 over 10,000. The overlaps are where two
+outlines (each drawn from its own national source) disagree about where the border runs:
+dozens of strips and patches along it, up to about 1,000 km² each. They matter where
+people live on the border: towns, river banks.
+
+| Pair | Overlap | Counted twice | Note |
+| --- | ---: | ---: | --- |
+| BGD–IND | 2,426 km² | 293,647 | 54 pieces; the largest (842 km²) along Sylhet's border with Meghalaya. BGD's raster holds 1.61 M there |
+| CMR–NGA | 2,926 km² | 220,530 | 96 pieces; the largest (1,091 km²) near 8.7°N 12.8°E |
+| ARG–PRY | 1,997 km² | 108,023 | 40 pieces, along the Paraguay river from Formosa to Clorinda and Asunción |
+| ARG–BRA | 1,963 km² | 92,272 | |
+| TKM–UZB | 3,030 km² | 82,195 | |
+| COD–ZMB | 915 km² | 76,697 | |
+| BEN–NGA | 514 km² | 62,269 | |
+| NER–NGA | 501 km² | 50,205 | |
+| CMR–TCD | 544 km² | 48,600 | |
+| ARE–OMN | 336 km² | 47,638 | |
+
+As a share of a country's people, the most affected are Bhutan (1.6%), Paraguay (1.5%),
+Turkmenistan (1.4%) and Cameroon (1.0%). A drawn shape on one of these borders counts
+those people twice. Not fixed yet: ROADMAP F-30.
 
 ## Whole people
 

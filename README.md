@@ -155,6 +155,7 @@ make verify COUNTRIES="CMR"     # the country's total from its outline, reconcil
 make browser-setup              # once: the headless Chromium the browser checks use
 make site && make parity        # the browser's answers equal the Python resolver's
 make countries-check            # every country in dist/, and the page's memory use
+make overlaps                   # people counted in two countries where outlines overlap
 ```
 
 How the checks work, and the results so far: [docs/VERIFICATION.md](docs/VERIFICATION.md).

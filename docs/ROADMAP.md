@@ -35,7 +35,7 @@ but it is a deliberate choice.
 | F-27 | Continuous integration: tests and lint on every push | Shaped (level 1 shipped) | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
-| F-30 | Outline-overlap audit: no one counted in two countries | Inbox | S–M | ★★ | ✅ | — |
+| F-30 | Outline-overlap audit: no one counted in two countries | Doing (audit built; fix not chosen) | S–M | ★★ | ✅ | — |
 | F-31 | "New version available" notice for a tab left open | Inbox | S | ★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
@@ -215,6 +215,10 @@ Candidates still open:
   holds inside the overlap; fail where both hold people there. Meta's files cover their
   country's bounding box, so a Meta pack can hold people inside a neighbour's claim (India's
   outline takes in Pakistan-administered Kashmir).
+  Audit built 2026-10-20 (`make overlaps`; results in [VERIFICATION.md](VERIFICATION.md)):
+  1,673,012 people (0.03%) counted twice across 161 pairs, 85 pairs over 1,000. Fix not
+  chosen yet: give each overlap to one side at clip time, or move to a boundary set with no
+  overlaps (geoBoundaries CGAZ).
 - **F-31:** a tab keeps the version it loaded until it is reloaded. Show a small "New
   version available, reload" notice when a new service worker takes over, or when the
   catalogue changes.
