@@ -69,6 +69,10 @@ does not cover.
     `TallyStatic.query`, downloading only the packs they touch.
   - Results as a table (name, total, area, density), highlighted on the map when clicked.
   - Export to CSV, and GeoJSON with a `population` property (pairs with F-04).
+  - Points with a radius, as well as polygons: much of what users hold is points
+    (people-group centres, clinics, villages, project sites). A CSV of name, latitude,
+    longitude and radius (or one radius for all), each counted as a circle, in the same
+    table. Added 2026-10-20.
 - **Limits to decide:** features per batch (500 to start), vertices, and features over
   areas with no data, which are reported and never dropped silently.
 - **Risks:** multipolygons and holes need parity tests; large batches should run in a Web
