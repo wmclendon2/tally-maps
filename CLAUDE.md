@@ -80,7 +80,12 @@ Read it before changing the pipeline, the pack format or the resolver.
   truncate HTTP/1.1 bodies from urllib with no error; keep curl first.
 - Meta has no file for RUS, CHN, PAK, CAN, GRL, MAR, SDN, SSD, SOM, ESH (and others; see the
   coverage map). Meta's JEY file has no data over Jersey. CAN, GRL and JEY are WorldPop
-  100 m (`build_packs.SOURCE_FOR`). Before building a new country, take it into the overlap
+  100 m (`build_packs.SOURCE_FOR`). WorldPop's files hold only their own country (cut at
+  LSIB), so Canada's clip is its outline grown 0.1° (`boundaries.CLIP_GROW_DEG`; the plain
+  outline cut off 9,429 people) and cut at built neighbours by the overlap split; its map
+  outline, no-data mask and area stay plain. geoBoundaries publishes outlines as CC BY
+  4.0, but each outline's source keeps its own licence (73 of the 198 are ODbL, mostly
+  OpenStreetMap; NOTICE.md lists them). Before building a new country, take it into the overlap
   split (below): Meta's bounding-box files can hold people inside a neighbour's claim
   (IND's outline takes in Pakistan-administered Kashmir), so both packs would count them,
   and `audit_overlaps.py --candidate XXX` shows how many. Kosovo is `KOS` at WorldPop,

@@ -15,9 +15,22 @@ credit the sources below.
 | --- | --- | --- | --- |
 | Meta High Resolution Settlement Layer (HRSL), via the Humanitarian Data Exchange | Population, 30 m | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Data for Good at Meta and CIESIN, Columbia University — High Resolution Population Density Maps |
 | [WorldPop](https://www.worldpop.org) | Population, 100 m (where Meta has no data) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | WorldPop (www.worldpop.org), University of Southampton |
-| [geoBoundaries](https://www.geoboundaries.org) | Country outlines for clipping and display; its CGAZ global ADM0 set to split overlapping outlines | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | Runfola et al. (2020), geoBoundaries, PLoS ONE 15(4): e0231866 |
+| [geoBoundaries](https://www.geoboundaries.org) | Country outlines for clipping and display; its CGAZ global ADM0 set to split overlapping outlines | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with each outline's source under its own licence (below) | Runfola et al. (2020), geoBoundaries, PLoS ONE 15(4): e0231866 |
 | [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, outlines for six territories (HKG, MAC, JEY, VIR, PCN, GRL), the coverage map | Public domain | Made with Natural Earth |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright), served by [OpenFreeMap](https://openfreemap.org) | Basemap | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/) | © OpenStreetMap contributors, OpenFreeMap |
+
+**geoBoundaries' sources.** geoBoundaries publishes its outlines under CC BY 4.0, and
+lists for each country the source it drew the outline from and that source's licence
+(`boundarySource` and `boundaryLicense` in its API, e.g.
+`https://www.geoboundaries.org/api/current/gbOpen/CMR/ADM0/`). For the countries Tally
+builds, as of 2026-10-21 (198 outlines): Open Data Commons ODbL 1.0 for 73 (mostly
+OpenStreetMap: © OpenStreetMap contributors), CC BY 4.0 for 48, public domain for 31, CC
+BY 3.0 IGO for 9, CC BY-SA for 8 (2.0 or 3.0), CC0 for 7, CC BY 2.5 for 6, CC BY 3.0 for
+4, and the rest under national or other licences: the Open Government Licence v3.0 (two),
+swisstopo's licence, Germany's DL-DE BY 2.0, "Other - Humanitarian" (Poland) and the
+Pixabay licence (Taiwan). The six territories outlined from Natural Earth (GRL, HKG, JEY,
+MAC, PCN, VIR) are public domain. Share-alike licences (ODbL, CC BY-SA) carry their own
+conditions for derived data.
 
 **Derived data:**
 - The country packs and H3 cells are adaptations of the population data. They are

@@ -14,7 +14,8 @@ ties to the lower ISO3 code. So does the whole overlap when CGAZ has no unit for
 it folds Puerto Rico, Guam, the US Virgin Islands and others into their parent, whose
 raster holds no one there (split along CGAZ, Puerto Rico's 3.6 M people would go to the
 USA's pack, which has none of them). A country's clip is its own outline minus the pieces
-it gives away.
+it gives away; for a WorldPop country the outline is first grown about 10 km
+(boundaries.CLIP_GROW_DEG), and the split cuts it at its built neighbours.
 
 Who gets the rest needs both rasters, so scripts/split_overlaps.py decides once for every
 overlapping pair, a < b, and records it in reference/overlap_split.json (checked in). A
@@ -39,7 +40,7 @@ import shapely
 from shapely.geometry import Polygon, mapping
 from shapely.geometry.base import BaseGeometry
 
-from ingest.boundaries import fetch_boundary, outline_shape
+from ingest.boundaries import CLIP_GROW_DEG, area_km2, clip_base, fetch_boundary
 from ingest.config import BOUNDARY_DIR, DATA_DIR, ROOT
 from ingest.fetch import get_bytes
 
@@ -192,18 +193,28 @@ def pairs_of(iso3: str, split: dict) -> list[dict]:
 
 
 def split_key(iso3: str, split: dict) -> str:
-    """What a country's clip depends on, besides the outlines: its pairs and CGAZ's file."""
-    doc = {"cgaz": split["cgaz"]["sha256"], "pairs": pairs_of(iso3, split)}
+    """What a country's clip depends on, besides the outlines: its pairs, CGAZ's file and
+    how far its outline is grown."""
+    doc = {
+        "cgaz": split["cgaz"]["sha256"],
+        "pairs": pairs_of(iso3, split),
+        "grow": CLIP_GROW_DEG.get(iso3),
+    }
     return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def clip_doc(iso3: str, geometry: BaseGeometry, key: str, source: dict) -> dict:
     """A clip as GeoJSON, keeping its outline's metadata (a Natural Earth outline's land
-    area, which its density is measured by)."""
+    area, which its density is measured by). A grown clip reaches out to sea, so its area
+    is the plain outline's."""
     feature = next(iter(source.get("features") or [{}]), {})
+    tally = {**source.get("tally", {}), "split": key}
+    if iso3 in CLIP_GROW_DEG and "land_area_km2" not in tally:
+        land = sum(area_km2(f["geometry"]) for f in source["features"] if f.get("geometry"))
+        tally["land_area_km2"] = round(land, 1)
     return {
         "type": "FeatureCollection",
-        "tally": {**source.get("tally", {}), "split": key},
+        "tally": tally,
         "features": [
             {
                 "type": "Feature",
@@ -215,13 +226,14 @@ def clip_doc(iso3: str, geometry: BaseGeometry, key: str, source: dict) -> dict:
 
 
 def clip_path(iso3: str, split: dict | None = None, *, units: dict | None = None) -> Path:
-    """The outline a country's raster is clipped to: its own, minus the overlaps it gives
-    away. A country in no pair is clipped to its own outline file."""
+    """The outline a country's raster is clipped to: its own (grown for CLIP_GROW_DEG),
+    minus the overlaps it gives away. A country in no pair and not grown is clipped to its
+    own outline file."""
     iso3 = iso3.upper()
     split = load_split() if split is None else split
     pairs = pairs_of(iso3, split)
     src = fetch_boundary(iso3)
-    if not pairs:
+    if not pairs and iso3 not in CLIP_GROW_DEG:
         return src
     key = split_key(iso3, split)
     path = CLIP_DIR / f"{iso3}_ADM0.geojson"
@@ -231,10 +243,10 @@ def clip_path(iso3: str, split: dict | None = None, *, units: dict | None = None
 
     def outline(code: str) -> BaseGeometry:
         if code not in cache:
-            cache[code] = outline_shape(fetch_boundary(code))
+            cache[code] = clip_base(code)
         return cache[code]
 
-    if units is None:
+    if units is None and pairs:
         if split["cgaz"]["sha256"] != CGAZ_SHA256:
             raise RuntimeError(f"{SPLIT_PATH.name} was made with another CGAZ file")
         units = cgaz_units({c for p in pairs for c in (p["a"], p["b"])})

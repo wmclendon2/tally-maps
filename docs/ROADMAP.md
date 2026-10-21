@@ -89,17 +89,23 @@ does not cover.
   0.02% to clipping, while Greenland's geoBoundaries coast lost 99.5% and needed Natural
   Earth.
 - **Batches:**
-  1. **Done 2026-10-18:** Canada and Greenland (Jersey 2026-10-13).
+  1. **Done 2026-10-18:** Canada and Greenland (Jersey 2026-10-13). On 2026-10-20 Canada's
+     clip became its outline grown 0.1° (about 10 km) and cut at the USA and Greenland
+     along CGAZ (`boundaries.CLIP_GROW_DEG`): WorldPop's files hold only their own
+     country's people, cut at the same US lines, so the grown clip takes in the coast and
+     border towns the plain outline cut off (+9,428 people) and nothing of a neighbour's.
+     The map outline, the no-data mask and the area stay plain.
   2. **Small places with undisputed borders:** Andorra, Luxembourg, Isle of Man,
      Montenegro, Cuba, Curaçao, Sint Maarten, Bermuda, the Falklands, Niue, Norfolk
      Island, Saint Barthélemy, Saint-Martin, Saint Pierre and Miquelon, Christmas Island
      and Cocos. Several need Natural Earth outlines; Natural Earth draws Christmas Island
-     and Cocos as one shape.
+     and Cocos as one shape. Canada's grown clip may serve them too.
   3. **Disputed borders, after F-30:** Pakistan and China (Kashmir, Aksai Chin,
      Arunachal), Azerbaijan (Karabakh), Morocco and Western Sahara, Russia and Ukraine
      (Crimea), Israel, Palestine and Syria (the Golan), Sudan and South Sudan (Abyei),
      Cyprus, Somalia, Åland (inside Finland's outline), Venezuela (Guyana's Essequibo),
-     Kosovo (`KOS` at WorldPop, `XKX` at geoBoundaries).
+     Kosovo (`KOS` at WorldPop, `XKX` at geoBoundaries). The split follows CGAZ, and so US
+     State Department lines, in disputed areas: decide that, and say it on About, first.
 - **Known limits:** Russia crosses the 180° meridian, which `verify_country.py` refuses,
   so it needs another total check. China's pack will be the largest. The Vatican has no
   WorldPop file; Somaliland and Northern Cyprus have no code of their own and come with

@@ -75,7 +75,8 @@ SOURCE = "meta_hrsl"
 # Meta's "Jersey" file (jey_general_2020) has no data over Jersey at all: its 418 k people
 # are Guernsey's and Normandy's, and every pixel on the island is nodata (checked
 # 2026-10-13). Meta has no file at all for Canada or Greenland, whose borders are
-# undisputed, so no neighbour's pack can hold their people.
+# undisputed, so no neighbour's pack can hold their people. Canada's clip is grown and
+# split with its neighbours (ingest/boundaries.CLIP_GROW_DEG).
 SOURCE_FOR = {"JEY": "worldpop_100m", "CAN": "worldpop_100m", "GRL": "worldpop_100m"}
 PACK_CACHE = DATA_DIR / "packs"
 DEFAULT_COUNTRIES = ["CMR", "CAF"]

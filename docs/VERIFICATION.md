@@ -52,7 +52,11 @@ pack, so no `--source` is needed.
 - Canada: polygon 37,434,213, gain 17,520 (USA), loss 592,279. The −1.5% net border
   error is the jagged Arctic coast at resolution 7, as with the small islands. Clipping
   the raster dropped only 9,429 of WorldPop's 38,018,401. With whole people: polygon
-  37,434,221, gain 17,500, loss 592,251.
+  37,434,221, gain 17,500, loss 592,251. Since 2026-10-20 Canada's clip is its outline
+  grown 0.1° and cut at the USA and Greenland along CGAZ (`boundaries.CLIP_GROW_DEG`): the
+  pack holds 38,018,400, all but 1 of WorldPop's total, and the net border error is
+  −1.53% (this check fills the plain outline, and the coastal people the grown clip keeps
+  lie outside it; the identity still balances).
 - Greenland: 55,581, with no gain or loss, the raster's whole total. geoBoundaries'
   outline kept only 265 of them (its coast runs inland of the towns), so Greenland is
   clipped to Natural Earth's (`ingest/boundaries.py`).

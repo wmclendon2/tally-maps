@@ -57,9 +57,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from build_packs import PACK_CACHE, raster_paths, source_for
-from verify_country import load_outline
 
-from ingest.boundaries import area_km2, outline_shape
+from ingest.boundaries import area_km2, clip_base, outline_shape
 from ingest.config import DATA_DIR, SOURCES
 from ingest.overlaps import clip_path, polygonal
 from ingest.pipeline import expand_rasters
@@ -271,7 +270,7 @@ def main(
     candidates = sorted({c.upper() for c in candidate or []} - set(built))
     focus = {c.upper() for c in country or []} | set(candidates) or None
     with console.status("Loading outlines"):
-        outlines = {iso3: load_outline(iso3) for iso3 in candidates}
+        outlines = {iso3: clip_base(iso3) for iso3 in candidates}
         if focus is None:
             codes = built
         else:

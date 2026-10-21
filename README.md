@@ -143,7 +143,7 @@ coasts, borders and in places that have changed recently.
 | --- | --- | --- |
 | [Meta High Resolution Population Density Maps][hrsl] via [HDX][hdx] | Population, 30 m | CC BY 4.0 |
 | [WorldPop](https://www.worldpop.org) | Population, 100 m, where Meta has no data (Canada, Greenland, Jersey) | CC BY 4.0 |
-| [geoBoundaries][gb] | Country outlines for clipping; its CGAZ set splits outlines that overlap | CC BY 4.0 |
+| [geoBoundaries][gb] | Country outlines for clipping; its CGAZ set splits outlines that overlap | CC BY 4.0; each outline's source keeps its own open licence (often OpenStreetMap's ODbL), listed in geoBoundaries' metadata |
 | [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, six territories' outlines | Public domain |
 | [OpenFreeMap](https://openfreemap.org) / OpenStreetMap | Basemap | ODbL |
 

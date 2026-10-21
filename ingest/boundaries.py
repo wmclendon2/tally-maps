@@ -58,6 +58,16 @@ ADM0_FROM_NATURAL_EARTH = {
 }
 
 
+# Countries whose raster holds only their own people, so their clip can safely reach past
+# their outline: WorldPop's files are cut at LSIB, the US State Department's line. Their
+# outline is grown by this many degrees (about 10 km) to take in the coast and the border
+# towns a coarse outline cuts off, and the overlap split (ingest/overlaps.py) cuts it at
+# each built neighbour along CGAZ, which follows the same US lines. Measured 2026-10-20,
+# Canada's plain outline lost 9,429 of WorldPop's people (0.025%), the grown clip 1. The
+# outline drawn on the map, the no-data mask and the country's area stay the plain outline.
+CLIP_GROW_DEG = {"CAN": 0.1}
+
+
 def boundary_path(country: str, adm: int = 0) -> Path:
     return BOUNDARY_DIR / f"{country.upper()}_ADM{adm}.geojson"
 
@@ -188,6 +198,13 @@ def outline_shape(path: Path):
 
     geom = unary_union([shape(g) for g in load_geometries(path)])
     return geom if geom.is_valid else geom.buffer(0)
+
+
+def clip_base(iso3: str):
+    """The outline a country's clip starts from: its own, grown for CLIP_GROW_DEG."""
+    geom = outline_shape(fetch_boundary(iso3))
+    grow = CLIP_GROW_DEG.get(iso3.upper())
+    return geom.buffer(grow, quad_segs=4) if grow else geom
 
 
 def load_geometries(path: Path) -> list[dict]:

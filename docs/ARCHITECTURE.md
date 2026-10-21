@@ -24,7 +24,10 @@ from the Humanitarian Data Exchange. `ingest/hdx.py` finds each country's
 general-population GeoTIFF through the HDX CKAN API and needs no key. Meta covers 196
 countries and territories. Where Meta has no usable file, [WorldPop][worldpop] 100 m is used
 (`ingest/worldpop_hub.py`): for Canada and Greenland, which Meta has no file for, and
-Jersey, whose Meta file has no data over the island. Each pack records its source, so the app can say which one a number came from.
+Jersey, whose Meta file has no data over the island. WorldPop's files hold only their own
+country's people (cut at LSIB), so Canada's clip is its outline grown about 10 km, which
+takes in the coast and border towns a coarse outline cuts off, and the overlap split below
+cuts it at each built neighbour. Each pack records its source, so the app can say which one a number came from.
 
 **Outlines.** Meta's country files cover the country's whole bounding box, not its
 outline. Cameroon's file holds 106 million people, 79.6 million of whom live in Nigeria,

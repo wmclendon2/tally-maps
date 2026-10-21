@@ -171,7 +171,10 @@ def boundaries(tmp_path, monkeypatch):
         "BBB": write_outline(tmp_path / "BBB.geojson", B),
         "CCC": write_outline(tmp_path / "CCC.geojson", box(10, 10, 11, 11)),
     }
+    from ingest import boundaries as gb
+
     monkeypatch.setattr(ov, "fetch_boundary", lambda iso3: files[iso3])
+    monkeypatch.setattr(gb, "fetch_boundary", lambda iso3: files[iso3])
     monkeypatch.setattr(ov, "CLIP_DIR", tmp_path / "clip")
     return files
 
@@ -252,3 +255,33 @@ def test_the_split_file_is_json_with_one_pair_a_line(tmp_path):
     so.write_split(split, path)
     assert json.loads(path.read_text()) == split
     assert sum('"a":"AAA"' in line for line in path.read_text().splitlines()) == 2
+
+
+def test_a_grown_clip_reaches_past_its_outline_but_keeps_its_area(boundaries, monkeypatch):
+    from ingest import boundaries as gb
+    from ingest.boundaries import land_area_km2, outline_shape
+
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "CCC", 0.1)
+    monkeypatch.setitem(ov.CLIP_GROW_DEG, "CCC", 0.1)
+    path = ov.clip_path("CCC", split_doc())  # in no pair, but grown
+    assert path.parent.name == "clip"
+    clip = outline_shape(path)
+    assert clip.contains(box(9.95, 9.95, 11.05, 11.05))
+    # Density is people over the outline's own area, not the sea it was grown into.
+    assert land_area_km2(path) == pytest.approx(
+        gb.area_km2(box(10, 10, 11, 11).__geo_interface__), abs=0.1
+    )
+
+
+def test_a_grown_clip_is_cut_at_its_neighbour_along_cgaz(boundaries, monkeypatch):
+    from ingest import boundaries as gb
+    from ingest.boundaries import outline_shape
+
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "BBB", 0.2)
+    monkeypatch.setitem(ov.CLIP_GROW_DEG, "BBB", 0.2)
+    clip = outline_shape(ov.clip_path("BBB", split_doc(), units=UNITS))
+    # Grown 0.2 it reaches into AAA's outline as far as x 0.8, but CGAZ gives AAA all of
+    # that west of 1.5; the strips beside AAA's outline (sea, here) stay BBB's.
+    assert ov.polygonal(clip.intersection(A)).equals(box(1.5, 0, 2, 1))
+    assert clip.contains(box(0.9, 1.05, 3.1, 1.15))
+    assert clip.bounds[2] == pytest.approx(3.2)

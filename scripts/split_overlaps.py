@@ -41,9 +41,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from audit_overlaps import built_countries, overlaps, rasters_for, read_people
-from verify_country import load_outline
 
-from ingest.boundaries import area_km2, outline_shape
+from ingest.boundaries import area_km2, clip_base, outline_shape
 from ingest.overlaps import (
     CGAZ_SHA256,
     CGAZ_URL,
@@ -124,7 +123,7 @@ def main(
         )
         raise typer.Exit(2)
     with console.status("Loading outlines"):
-        outlines = {iso3: load_outline(iso3) for iso3 in codes}
+        outlines = {iso3: clip_base(iso3) for iso3 in codes}
     found = sorted(overlaps(outlines))
     units = cgaz_units(codes)
     console.print(
