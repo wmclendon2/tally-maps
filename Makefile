@@ -8,7 +8,7 @@ COUNTRIES ?= CMR CAF
 PORT ?= 8081
 COUNTRY_FLAGS := $(foreach c,$(COUNTRIES),--country $(c))
 
-.PHONY: help setup catalog packs site serve demo test lint check browser-setup parity countries-check verify overlaps
+.PHONY: help setup catalog packs site serve demo test lint check browser-setup parity countries-check verify overlaps split
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-16s %s\n", $$1, $$2}'
@@ -53,6 +53,9 @@ countries-check: ## Check every country in dist/ in the browser, and its memory 
 
 overlaps: ## Find people counted in two countries where outlines overlap (all packs; ~1 h)
 	uv run python scripts/audit_overlaps.py
+
+split: ## Split overlapping outlines between their countries, taking in COUNTRIES (all packs)
+	uv run python scripts/split_overlaps.py $(COUNTRY_FLAGS)
 
 verify: ## Check COUNTRIES' totals and city positions from their packs
 	@for c in $(COUNTRIES); do uv run python scripts/verify_country.py --country $$c || exit 1; done

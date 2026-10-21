@@ -70,8 +70,9 @@ These are expectations from the methods, to be checked by F-32.
   share of the country) separates "where" from "how many".
 - **Borders.** Tally clips both to geoBoundaries. WorldPop's files are already cut at LSIB,
   which reflects US policy on disputed borders; where LSIB and geoBoundaries disagree,
-  people can fall outside every pack, or (with Meta's bounding boxes) inside two. This is
-  what the overlap audit (F-30) is for.
+  people can fall outside every pack, or (with Meta's bounding boxes) inside two. Since
+  F-30, where two built countries' outlines overlap the overlap is split along CGAZ
+  (`ingest/overlaps.py`), and the overlap audit checks that no one is left in two.
 - **Resolution at Tally's scale.** Tally's finest hexagon (H3 resolution 9, about 0.1 km²)
   holds about 117 Meta pixels or 11 WorldPop pixels, so at the finest level the 30 m vs
   100 m difference shows mostly at edges: coasts, borders, the edge of a town.

@@ -379,9 +379,25 @@ def build_country(
 
 def country_area(iso3: str) -> float:
     """km^2 of the clipping outline (land only for a grown Natural Earth one)."""
-    from ingest.boundaries import fetch_boundary, land_area_km2
+    from ingest.boundaries import land_area_km2
+    from ingest.overlaps import clip_path
 
-    return round(land_area_km2(fetch_boundary(iso3)), 1)
+    return round(land_area_km2(clip_path(iso3)), 1)
+
+
+def clip_outline(iso3: str) -> Path:
+    """The outline a country's raster is clipped to: its own, minus the overlaps it gives
+    to a neighbour (ingest/overlaps.py, F-30)."""
+    from ingest.overlaps import SPLIT_PATH, clip_path, load_split
+
+    split = load_split()
+    if iso3 not in split["countries"]:
+        console.print(
+            f"[yellow]{iso3} is not in {SPLIT_PATH.name}: its overlaps with neighbours are not "
+            "split, so their packs may both count people there. Run "
+            f"scripts/split_overlaps.py --country {iso3} first.[/yellow]"
+        )
+    return clip_path(iso3, split)
 
 
 def part_header(path: Path) -> dict:
@@ -494,12 +510,11 @@ def data_version(paths: list[Path]) -> str:
 
 def country_levels(iso3: str, source: str) -> tuple[dict, list[dict], str]:
     """{resolution: (cells, pops)} for one country, its outline features and data vintage."""
-    from ingest.boundaries import fetch_boundary
     from ingest.pipeline import run_country
 
     src = SOURCES[source]
     paths = raster_paths(iso3, source)
-    boundary = fetch_boundary(iso3)
+    boundary = clip_outline(iso3)
     r = run_country(iso3, source, paths, src.base_resolution, boundary=boundary, console=console)
     levels = dict(r.levels)
     levels[src.base_resolution] = (r.cells, r.pops)

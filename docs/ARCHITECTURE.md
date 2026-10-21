@@ -35,6 +35,21 @@ to Natural Earth's outline, grown slightly to catch the coast and cut at the nei
 (`ingest/boundaries.py`). Greenland's geoBoundaries coast runs inland of its towns and kept
 265 of its 55,581 people.
 
+**Overlaps.** Neighbouring outlines come from different national sources and disagree
+about where a border runs, so they overlap in strips along it, and Meta's bounding-box
+files put the people there in both packs (1.67 million before the fix). So where two
+outlines overlap, the overlap is split along [geoBoundaries CGAZ][cgaz], a global set with
+no overlaps: the part in A's CGAZ unit goes to A, the part in B's to B, and the rest (in
+neither, or in a disputed unit of its own) to the side whose raster holds more people
+there. When CGAZ has no unit for one side (it folds Puerto Rico, Guam and other
+territories into their parent, whose raster is empty there), the whole overlap goes by
+people. Each raster is clipped to its outline minus what it gives away
+(`ingest/overlaps.py`). Who gets the rest needs both rasters, so
+`scripts/split_overlaps.py` decides it once and checks it in as
+`reference/overlap_split.json`; a build reads CGAZ itself (162 MB, downloaded once,
+pinned to one release and checked by hash). CGAZ alone was not used for clipping: its simplified coasts would
+drop about 20 million people, and it has no unit for 25 of Tally's territories.
+
 **Binning.** `ingest/raster.py` streams the raster window by window. Each populated pixel's
 centre goes into the H3 cell that contains it, at a base resolution of 9 (about 0.1 km²).
 The cells are then rolled up into their parents down to resolution 3 (`ingest/pyramid.py`),
@@ -144,6 +159,7 @@ These are easy to break and hard to notice:
 | Base resolution 9 | About 0.1 km², several source pixels per cell (30 m and 100 m data alike) |
 | Clip at ingest, not at query | Each person belongs to exactly one country, so summing countries is always safe |
 | geoBoundaries for outlines | CC BY 4.0; GADM's licence restricts redistribution and commercial use |
+| Overlaps split along CGAZ | Keeps each country's detailed outline; only the strips two outlines share change hands |
 | Static packs, no server | Nothing to run but a web server, works offline, and nothing a visitor draws leaves the browser |
 | One pack per country, split by region | A first count downloads only the region it needs, and every file stays small |
 | A PWA, not a native app | One code base; installs on phones and desktops |
@@ -157,3 +173,4 @@ checked against Natural Earth city locations. See [VERIFICATION.md](VERIFICATION
 [hrsl]: https://dataforgood.facebook.com/dfg/tools/high-resolution-population-density-maps
 [worldpop]: https://www.worldpop.org
 [gb]: https://www.geoboundaries.org
+[cgaz]: https://www.geoboundaries.org/globalDownloads.html

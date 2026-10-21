@@ -57,8 +57,10 @@ make demo     # builds Cameroon and the Central African Republic, then serves th
 
 Open **http://127.0.0.1:8081** in your browser. Press Ctrl-C in the terminal to stop.
 
-`make demo` downloads about 60 MB the first time (two population rasters of 24 and 32 MB,
-their country outlines, and Natural Earth's world map for the grey "no data" areas) and
+`make demo` downloads about 220 MB the first time (two population rasters of 24 and 32 MB,
+their country outlines and their neighbours', geoBoundaries' 162 MB world map that splits
+outlines where neighbours overlap, and Natural Earth's world map for the grey "no data"
+areas) and
 takes a minute or two. Later runs reuse everything already downloaded or built.
 
 ### Other countries
@@ -102,7 +104,7 @@ largest are India (780 MB) and the USA (1.1 GB). All of Meta's countries come to
 | Path | What | Safe to delete? |
 | --- | --- | --- |
 | `data/raw/` | Downloaded population rasters | Yes; downloaded again when needed |
-| `data/boundaries/`, `data/natural_earth/` | Downloaded country outlines | Yes; downloaded again |
+| `data/boundaries/`, `data/natural_earth/`, `data/cgaz/` | Downloaded country outlines, and the clips made from them | Yes; downloaded or made again |
 | `data/packs/` | Built packs and `catalog.json` | Yes; rebuilt from the rasters |
 | `dist/` | The built app | Yes; `make site` rewrites it |
 | `.venv/` | Python and libraries | Yes; `make setup` recreates it |
@@ -141,7 +143,7 @@ coasts, borders and in places that have changed recently.
 | --- | --- | --- |
 | [Meta High Resolution Population Density Maps][hrsl] via [HDX][hdx] | Population, 30 m | CC BY 4.0 |
 | [WorldPop](https://www.worldpop.org) | Population, 100 m, where Meta has no data (Canada, Greenland, Jersey) | CC BY 4.0 |
-| [geoBoundaries][gb] | Country outlines for clipping | CC BY 4.0 |
+| [geoBoundaries][gb] | Country outlines for clipping; its CGAZ set splits outlines that overlap | CC BY 4.0 |
 | [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, six territories' outlines | Public domain |
 | [OpenFreeMap](https://openfreemap.org) / OpenStreetMap | Basemap | ODbL |
 
@@ -158,6 +160,12 @@ make countries-check            # every country in dist/, and the page's memory 
 make overlaps                   # people counted in two countries where outlines overlap
 ```
 
+Neighbouring countries' outlines overlap where their sources disagree about the border.
+`reference/overlap_split.json` gives each overlap to one side, so no one is counted twice.
+The split follows geoBoundaries' CGAZ world map (downloaded once into `data/cgaz/`).
+After adding a country Tally has never had, with every country built, run
+`make split COUNTRIES="XXX"`, then rebuild the countries it names and run `make overlaps`.
+
 How the checks work, and the results so far: [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## Layout
@@ -167,7 +175,7 @@ How the checks work, and the results so far: [docs/VERIFICATION.md](docs/VERIFIC
 | `ingest/` | Download from HDX, clip, bin to H3, roll up; the Python reference resolver |
 | `scripts/` | Packs, the static build, verification, the coverage map |
 | `web/` | The app: MapLibre, Terra Draw, h3-js. No build step |
-| `reference/` | Small checked-in data: city locations, continents |
+| `reference/` | Small checked-in data: city locations, continents, how overlapping outlines are split |
 | `tests/` | `pytest` suite |
 | `docs/` | Architecture, verification, data sources, roadmap |
 

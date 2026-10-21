@@ -25,7 +25,7 @@ but it is a deliberate choice.
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
 | F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Parked | L | ★★★ | ✅ | Pack format minor bump |
 | F-09 | Compare two shapes, or one area across data years | Inbox | M | ★★ | ✅ | F-13 for years |
-| F-10 | WorldPop 100 m for countries Meta lacks | Shaped (Jersey, Canada, Greenland done) | M | ★★★ | ✅ | F-30 for disputed borders |
+| F-10 | WorldPop 100 m for countries Meta lacks | Shaped (Jersey, Canada, Greenland done) | M | ★★★ | ✅ | — (F-30 shipped) |
 | F-13 | Data versioning and refresh of saved packs | Inbox | M | ★★ | ✅ | F-29 |
 | F-16 | Embeddable widget for articles | Inbox | M | ★★ | ✅ | F-05 |
 | F-17 | Printable one-page report (PDF) for an area | Inbox | M | ★★ | ✅ | F-04 |
@@ -35,7 +35,6 @@ but it is a deliberate choice.
 | F-27 | Continuous integration: tests and lint on every push | Shaped (level 1 shipped) | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
-| F-30 | Outline-overlap audit: no one counted in two countries | Doing (audit built; fix not chosen) | S–M | ★★ | ✅ | — |
 | F-31 | "New version available" notice for a tab left open | Inbox | S | ★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
@@ -190,6 +189,54 @@ Candidates still open:
   deliberately failing test on a throwaway branch (1 failed, 150 passed; the branch is
   deleted). Level 2 waits for a browser-side change such as F-02.
 
+### F-30 Outline overlaps: no one counted in two countries
+- **Why:** each country is clipped to its own geoBoundaries outline, and neighbouring
+  outlines (from different national sources) disagree about where the border runs, so
+  people in the strips between them are in both packs. Meta's files cover the country's
+  bounding box, so both sides' rasters hold them.
+- **Audit (built 2026-10-20):** `scripts/audit_overlaps.py`, `make overlaps` (~1 h, all
+  packs); method and results in [VERIFICATION.md](VERIFICATION.md). 1,673,012 people
+  (0.03%) counted twice across 161 pairs, 85 of them over 1,000; worst Bangladesh–India
+  293,647, Cameroon–Nigeria 220,530, Argentina–Paraguay 108,023.
+- **Not chosen: geoBoundaries CGAZ as the clipping outlines.** CGAZ is a global set with
+  no overlaps (disputed areas follow US State Department lines), but measured on the packs
+  (2026-10-20, by cell centre) it would drop about 20 M people (0.37%) outside its heavily
+  simplified coasts (Philippines 3.6 M, Indonesia 3.4 M, Japan 1.9 M, Maldives 88%, Tuvalu
+  96%), has no unit for 25 of Tally's territories (Puerto Rico, Hong Kong, Réunion, Guam
+  ...; 14.8 M people), moves 3 M people between countries (7.7% of Bhutan to India), and
+  was last updated 2024-04-20.
+- **The fix (chosen 2026-10-20):** keep today's outlines and change only the overlaps.
+  Split each overlap between two countries along CGAZ's border line (the part inside A's
+  CGAZ unit goes to A, inside B's to B); a piece in neither, or in a third unit, goes to
+  the side whose raster holds more people there, ties to the lower ISO3 code. Each
+  country's clip is its outline minus the pieces given away. The union of all outlines is
+  unchanged, so no one is lost; only double counts go.
+- **Steps:** load CGAZ ADM0 (`geoBoundariesCGAZ_ADM0.gpkg`, ~150 MB, from
+  `github.com/wmgeolab/geoBoundaries/raw/main/releaseData/CGAZ/`, cached under
+  `data/`) in `ingest/boundaries.py`; build the clip outlines with tests; rebuild the
+  affected countries' packs (`--rebuild`); rerun `make overlaps` (target: no pair over a
+  few people, from pixel-edge rounding); `verify_country.py`, `verify_cities.py`, the
+  browser checks and the coverage map; credit CGAZ in the docs and on About.
+- **Effort:** S–M: about a day, plus 2–3 h of machine time.
+- **Shipped 2026-10-20 (shell v44):** `ingest/overlaps.py` (the rule and
+  the clips), `scripts/split_overlaps.py` (`make split`: decides each pair's rest from both
+  rasters, writes the checked-in `reference/overlap_split.json`, 29 KB, builds every clip
+  and checks that no pair's clips overlap or drop a piece), `build_packs.py` clips to
+  them, `audit_overlaps.py` audits them. Two changes to the plan:
+  - **A side with no CGAZ unit decides the whole overlap by people.** CGAZ folds Puerto
+    Rico, Guam, the US Virgin Islands, the Northern Marianas, American Samoa, the British
+    Virgin Islands and French Guiana into their parent, so a plain split would have given
+    Puerto Rico's 3.6 M people (and 0.4 M more in the other US territories) to the USA's
+    pack, whose raster has none of them.
+  - **CGAZ is read at build time** (162 MB, pinned to the 2024-04-20 commit and checked by
+    sha256). Checking in CGAZ's line through the overlaps instead came to 19–22 MB, and
+    simplifying it enough to shrink it moved hundreds of km² off the line.
+  - 217 pairs, 132 countries give something away (89,851 km² of outline in all: the
+    USA 10,720, Libya 9,651, Argentina 8,259). The rest (in neither CGAZ
+    unit) held people in 21 pairs, nearly all of them the territories above.
+  - **Result:** the audit finds 0 people counted twice (was 1,673,012); the world total
+    fell by 1,713,213; every check passes (VERIFICATION.md, "The split").
+
 ## Notes on Inbox items
 
 - **F-04:** PNG export (Save image) shipped 2026-09-18; this item is the data formats,
@@ -211,14 +258,6 @@ Candidates still open:
   between a Meta country and a WorldPop one.
 - **F-29:** record each pack's source file address (HDX or WorldPop) and the download's
   sha256 in its header and the catalogue: a pack format minor bump.
-- **F-30:** for every pair of built countries whose outlines overlap, the people each pack
-  holds inside the overlap; fail where both hold people there. Meta's files cover their
-  country's bounding box, so a Meta pack can hold people inside a neighbour's claim (India's
-  outline takes in Pakistan-administered Kashmir).
-  Audit built 2026-10-20 (`make overlaps`; results in [VERIFICATION.md](VERIFICATION.md)):
-  1,673,012 people (0.03%) counted twice across 161 pairs, 85 pairs over 1,000. Fix not
-  chosen yet: give each overlap to one side at clip time, or move to a boundary set with no
-  overlaps (geoBoundaries CGAZ).
 - **F-31:** a tab keeps the version it loaded until it is reloaded. Show a small "New
   version available, reload" notice when a new service worker takes over, or when the
   catalogue changes.
@@ -314,3 +353,4 @@ Candidates still open:
 | F-10 | Canada and Greenland from WorldPop 100 m (198 countries and territories)                                                              | 2026-10-18 |
 | —    | Whole people in every hexagon: no "0 people" or fractions; packs 35% smaller                                                          | 2026-10-18 |
 | F-27 | Continuous integration, level 1: lint and tests on every push and pull request | 2026-10-20 |
+| F-30 | Outline overlaps split along CGAZ: no one counted in two countries (1.67 M were) | 2026-10-20 |

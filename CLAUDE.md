@@ -74,14 +74,25 @@ Read it before changing the pipeline, the pack format or the resolver.
   truncate HTTP/1.1 bodies from urllib with no error; keep curl first.
 - Meta has no file for RUS, CHN, PAK, CAN, GRL, MAR, SDN, SSD, SOM, ESH (and others; see the
   coverage map). Meta's JEY file has no data over Jersey. CAN, GRL and JEY are WorldPop
-  100 m (`build_packs.SOURCE_FOR`). Add a WorldPop country with a disputed border only after
-  checking the outline overlaps: Meta's bounding-box files can hold people inside a
-  neighbour's claim (IND's outline takes in Pakistan-administered Kashmir), so both packs
-  would count them. Kosovo is `KOS` at WorldPop, `XKX` at geoBoundaries. geoBoundaries has
-  no ADM0 for PRI (`ADM0_FROM_PARENT` takes USA ADM1).
+  100 m (`build_packs.SOURCE_FOR`). Before building a new country, take it into the overlap
+  split (below): Meta's bounding-box files can hold people inside a neighbour's claim
+  (IND's outline takes in Pakistan-administered Kashmir), so both packs would count them,
+  and `audit_overlaps.py --candidate XXX` shows how many. Kosovo is `KOS` at WorldPop,
+  `XKX` at geoBoundaries. geoBoundaries has no ADM0 for PRI (`ADM0_FROM_PARENT` takes USA
+  ADM1).
 - An outline is not proof of data (IND's claims Pakistan-administered Kashmir, FIN's holds
   Aland): the no-data mask keeps an overlap grey unless the pack has >= 5 people/km2 there
   (`CLAIM_SHARE`, `MIN_DENSITY` in `build_static.py`).
+- Neighbouring outlines overlap where their sources disagree (1.67 M people were in two
+  packs). Packs are clipped to `ingest/overlaps.clip_path` (the outline minus the overlaps
+  given away along CGAZ, cached in `data/boundaries/clip/`), not the raw outline. Who
+  gets each overlap's rest is checked in (`reference/overlap_split.json`); a build reads
+  CGAZ itself (`data/cgaz/`, 162 MB, pinned by commit and sha256; the line through the
+  overlaps alone was 22 MB, too big to check in). CGAZ has no unit for PRI, GUM, VIR, ASM, MNP, VGB, GUF (it
+  folds them into their parent, whose raster is empty there), so those overlaps go by
+  raster people; a plain CGAZ split would hand Puerto Rico's 3.6 M to the USA's pack. A
+  new country: `split_overlaps.py --country XXX` (needs every covered country built), then
+  rebuild the countries it names and run `make overlaps`.
 - `reference/continents.json` is Natural Earth 50m's CONTINENT field, checked in; MUS/SYC/
   MDV (filed under "Seven seas") are filed by REGION_UN.
 
@@ -104,6 +115,9 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
 - Verify: `UV_CACHE_DIR=.uv-cache uv run python scripts/verify_country.py --country CMR`
   and `scripts/verify_cities.py [--country XXX] [--min-pop 0]`.
 - Catalogue: `uv run python -m ingest.hdx` (Meta's countries and download sizes).
+- Overlaps: `UV_CACHE_DIR=.uv-cache uv run python scripts/split_overlaps.py [--country XXX]`
+  (writes `reference/overlap_split.json` and the clips; all packs) and
+  `scripts/audit_overlaps.py [--country XXX] [--candidate XXX]` (`make overlaps`, ~1 h).
 - Coverage map: `UV_CACHE_DIR=.uv-cache uv run python scripts/coverage_map.py`
   (writes the committed `docs/img/coverage-map.png` + `coverage.json`).
 - Link-preview image: `UV_CACHE_DIR=.uv-cache uv run --group browser python scripts/og_image.py
@@ -119,7 +133,7 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
   ideas in Inbox with a first sizing, shape items when asked, and record shipped items with
   the date.
 - Not built yet: WorldPop 100 m for the rest of the countries Meta lacks (F-10, batches in
-  the roadmap; disputed borders wait on the overlap audit, F-30), parity polygons outside
+  the roadmap; disputed borders go through the overlap split, F-30), parity polygons outside
   Africa/Brazil (F-28), the browser checks in CI (F-27 level 2).
 - CI: `.github/workflows/check.yml` runs `make check`'s steps on every push and pull
   request (no data needed). Keep the actions pinned by commit hash; a push that changes a

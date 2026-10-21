@@ -33,7 +33,7 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=43">
+  <link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
   <div id="map"></div>
@@ -197,7 +197,9 @@
           Most of the figures describe the years 2018 to 2020.</p>
         <p>Tally adds those squares up into hexagons, and counts the hexagons whose centre is
           inside your area. Fine hexagons follow its edge more closely. Country outlines come
-          from geoBoundaries.</p>
+          from geoBoundaries. Where two neighbours' outlines overlap, the overlap is split
+          along the border of geoBoundaries' world map, so no one is counted in both
+          countries.</p>
         <p>Each hexagon holds a whole number of people. Where people live thinly, each person
           is placed in the likeliest hexagon nearby rather than split into fractions.</p>
         <p>Point at a hexagon on the map, or tap it on a touch screen, to see how many people
@@ -251,8 +253,8 @@
             <a href="https://www.worldpop.org/" target="_blank" rel="noopener">WorldPop</a>,
             University of Southampton (CC BY 4.0).</dd>
           <dt>Outlines</dt>
-          <dd><a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a>
-            (CC BY 4.0).
+          <dd><a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a>,
+            and its CGAZ world map where outlines overlap (CC BY 4.0).
             <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>
             (public domain).</dd>
           <dt>Map</dt>
@@ -281,7 +283,7 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=43"></script>
-  <script src="app.js?v=43"></script>
+  <script src="static.js?v=44"></script>
+  <script src="app.js?v=44"></script>
 </body>
 </html>

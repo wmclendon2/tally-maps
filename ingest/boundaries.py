@@ -180,6 +180,16 @@ def land_area_km2(path: Path) -> float:
     return sum(area_km2(g) for g in load_geometries(path))
 
 
+def outline_shape(path: Path):
+    """An outline file as one shapely geometry, made valid (self-intersections are common in
+    OSM-derived outlines)."""
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+
+    geom = unary_union([shape(g) for g in load_geometries(path)])
+    return geom if geom.is_valid else geom.buffer(0)
+
+
 def load_geometries(path: Path) -> list[dict]:
     """GeoJSON-like geometry dicts (what rasterio.features expects) from a GeoJSON file."""
     doc = json.loads(Path(path).read_text())

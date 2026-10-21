@@ -169,12 +169,14 @@ people: all identical, peak 149 MB.
 uv run python scripts/audit_overlaps.py [--country XXX] [--candidate XXX] [--workers N]
 ```
 
-Each pack keeps the raster pixels whose centre lies inside its country's outline. Where two
-outlines overlap, a pixel there is inside both, and Meta's files cover each country's
+Each pack keeps the raster pixels whose centre lies inside the outline it was clipped to.
+Where two outlines overlap, a pixel there is inside both, and Meta's files cover each country's
 bounding box, so a neighbour's file usually holds the same people: both packs count them.
 `verify_country.py` cannot see this, since each country reconciles exactly with itself.
 
-The audit finds every pair of built outlines that overlap (each outline split into its
+Since F-30 packs are clipped to their outline minus the overlaps given to a neighbour
+(`ingest/overlaps.py`, ARCHITECTURE.md), and the audit reads those clips. The audit finds
+every pair of built outlines that overlap (each outline split into its
 polygons, so only pieces whose boxes meet are intersected), then reads each country's own
 raster inside its overlaps with the build's rule: pixel centre inside, the same valid-pixel
 test. Each raster is read once for all of its country's overlaps, since the rasters are
@@ -208,7 +210,26 @@ people live on the border: towns, river banks.
 
 As a share of a country's people, the most affected are Bhutan (1.6%), Paraguay (1.5%),
 Turkmenistan (1.4%) and Cameroon (1.0%). A drawn shape on one of these borders counts
-those people twice. Not fixed yet: ROADMAP F-30.
+those people twice.
+
+**The split (F-30, 2026-10-20).** `scripts/split_overlaps.py` splits every overlap along
+geoBoundaries CGAZ (the rule: ARCHITECTURE.md, `ingest/overlaps.py`) and checks each pair's
+clips: none may overlap, and every piece of the overlap must stay in one of them (or in a
+third country's, near a tripoint). Measured by planar area at the sliver's latitude (the
+spherical formula in `area_km2` puts a 1.5 m² sliver at 12,000 m²), the worst pair's clips
+share 16 m² and drop 78 m² (NER–TCD), a fraction of one 30 m pixel, from floating-point
+edges. 132 countries give something away; their packs were rebuilt (27 min, 6 workers).
+
+| After the split, 2026-10-20 | Result |
+| --- | --- |
+| Overlap audit (57 min, 7 workers) | 137 pairs touch, only in slivers; **0 people counted twice** (was 1,673,012) |
+| World total | 5,480,360,908, down 1,713,213: the double counts, plus 40 k where the side keeping a strip has a model holding fewer people there |
+| Largest changes | BGD −230,336, ARG −210,144, NGA −206,734, CMR −165,848, ZMB −100,846; as a share, TKM −1.46%, BTN −1.41%. No country rose; 86 are unchanged, Puerto Rico and the other territories CGAZ lacks among them |
+| `verify_country.py` CMR, BGD, ARG, TKM, PRI | All pass; the identity is exact, and the strips a neighbour now counts are its gain term |
+| `verify_cities.py`, 198 countries | Unchanged: 545 cities, median 3.4 km, p = 0.487, worst LBY 6.7 km SE (family-wise p 0.32) |
+| `browser_parity.py` | All 18 cases identical |
+| `browser_countries.py` | All 198 countries identical in the browser; peak 143 MB |
+| Packs | 269.83 MB (140 KB smaller); the coverage map is unchanged |
 
 ## Whole people
 

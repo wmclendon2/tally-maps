@@ -31,7 +31,6 @@ box spans nearly the whole globe.
 
 from __future__ import annotations
 
-import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,13 +41,11 @@ import numpy as np
 import typer
 from rich.console import Console
 from rich.table import Table
-from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import unary_union
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ingest.boundaries import boundary_path, fetch_boundary
+from ingest.boundaries import boundary_path, fetch_boundary, outline_shape
 from ingest.config import MIN_RESOLUTION, SOURCES
 
 console = Console()
@@ -61,18 +58,7 @@ FLOAT_TOL = 1e-6
 def load_outline(iso3: str) -> BaseGeometry:
     """The country's ADM0 outline as one shapely geometry."""
     path = boundary_path(iso3)
-    if not path.exists():
-        path = fetch_boundary(iso3)
-    doc = json.loads(path.read_text())
-    if doc.get("type") == "FeatureCollection":
-        geom = unary_union([shape(f["geometry"]) for f in doc["features"] if f.get("geometry")])
-    elif doc.get("type") == "Feature":
-        geom = shape(doc["geometry"])
-    else:
-        geom = shape(doc)
-    if not geom.is_valid:  # self-intersections are common in OSM-derived outlines
-        geom = geom.buffer(0)
-    return geom
+    return outline_shape(path if path.exists() else fetch_boundary(iso3))
 
 
 @dataclass

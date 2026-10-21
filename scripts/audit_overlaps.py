@@ -6,7 +6,7 @@
     uv run python scripts/audit_overlaps.py --country IND      # only pairs with India
     uv run python scripts/audit_overlaps.py --candidate PAK    # a country not built yet
 
-A pack is its country's raster clipped to its outline, keeping each pixel whose centre is
+A pack is its country's raster clipped to an outline, keeping each pixel whose centre is
 inside (ingest/raster.py). Where two outlines overlap, a pixel there is inside both: a
 claimed territory (India's outline takes in Pakistan-administered Kashmir) or a sliver
 where two outlines disagree by a few metres. If both rasters hold people at that spot,
@@ -19,9 +19,15 @@ reports the people each holds there. min(a, b) is the double count when both ras
 the same map (Meta's countries are cut from one global map); across two sources it is an
 estimate. Pairs over --fail-above people double counted make it exit 1.
 
+Built countries are read with the outlines their packs were clipped to: their own outline
+minus the overlaps given to a neighbour (ingest/overlaps.py, F-30). Before that split this
+found 1.67 M people counted twice; after it, what is left are slivers from floating-point
+edges, and the odd pixel whose centre lies exactly on one.
+
 A --candidate, a country not built yet, is checked the same way against the built ones,
-its own side read from its raster if one is cached (WorldPop by default): what adding it
-would count twice. Results also go to data/audit/overlaps.json.
+with its own outline, its side read from its raster if one is cached (WorldPop by
+default): what adding it would count twice before scripts/split_overlaps.py takes it in.
+Results also go to data/audit/overlaps.json.
 """
 
 from __future__ import annotations
@@ -53,8 +59,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_packs import PACK_CACHE, raster_paths, source_for
 from verify_country import load_outline
 
-from ingest.boundaries import area_km2
+from ingest.boundaries import area_km2, outline_shape
 from ingest.config import DATA_DIR, SOURCES
+from ingest.overlaps import clip_path, polygonal
 from ingest.pipeline import expand_rasters
 from ingest.raster import _valid_pixels
 
@@ -79,13 +86,6 @@ class Overlap:
         if self.people_a is None or self.people_b is None:
             return 0.0
         return min(self.people_a, self.people_b)
-
-
-def polygonal(g: BaseGeometry) -> BaseGeometry | None:
-    """The areal part of an intersection; shared edges and corners are not overlaps."""
-    parts = [p for p in getattr(g, "geoms", [g]) if p.geom_type in ("Polygon", "MultiPolygon")]
-    parts = [p for p in parts if not p.is_empty and p.area > 0]
-    return shapely.union_all(parts) if parts else None
 
 
 def overlaps(outlines: dict[str, BaseGeometry], pairs_with: set[str] | None = None) -> dict:
@@ -115,7 +115,7 @@ def overlaps(outlines: dict[str, BaseGeometry], pairs_with: set[str] | None = No
     for i, j, g in zip(left, right, inter, strict=True):
         if not g.is_empty:
             area = polygonal(g)
-            if area is not None:
+            if not area.is_empty:
                 found[(owner[i], owner[j])].append(area)
     return {pair: shapely.union_all(gs) for pair, gs in sorted(found.items())}
 
@@ -165,6 +165,48 @@ def raster_people(paths: list[str], areas: dict) -> dict:
     return totals
 
 
+def read_people(
+    areas: dict[tuple[str, str], BaseGeometry],
+    rasters: dict[str, list[str]],
+    workers: int,
+    t0: float,
+) -> dict[tuple[str, str, str], float | None]:
+    """{(a, b, iso3): people in iso3's raster inside areas[(a, b)]}, for iso3 in a and b;
+    None where iso3 has no raster to read.
+
+    One job per country: its raster is read once for all of its areas. Biggest rasters
+    first, so the long ones start early.
+    """
+    by_country: dict[str, dict] = defaultdict(dict)
+    for pair, area in areas.items():
+        for iso3 in pair:
+            by_country[iso3][pair] = area
+
+    def size(iso3: str) -> int:
+        return sum(
+            Path(p.split("!")[0].removeprefix("zip://")).stat().st_size for p in rasters[iso3]
+        )
+
+    people: dict[tuple[str, str, str], float | None] = {
+        (a, b, iso3): None for (a, b) in areas for iso3 in (a, b) if not rasters[iso3]
+    }
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        jobs = {
+            pool.submit(raster_people, rasters[iso3], country_areas): iso3
+            for iso3, country_areas in sorted(by_country.items(), key=lambda kv: -size(kv[0]))
+            if rasters[iso3]
+        }
+        with console.status("Reading rasters") as status:
+            for n, job in enumerate(as_completed(jobs), 1):
+                iso3 = jobs[job]
+                for (a, b), value in job.result().items():
+                    people[(a, b, iso3)] = value
+                status.update(f"Reading rasters: {n}/{len(jobs)} countries")
+                if not console.is_terminal:
+                    print(f"{n}/{len(jobs)} {iso3} done at {time.time() - t0:.0f} s", flush=True)
+    return people
+
+
 def _span(ds, bounds: tuple[float, float, float, float]) -> tuple[int, int, int, int] | None:
     """(col0, col1, row0, row1) of the pixels whose centres can lie within `bounds`."""
     w, s, e, n = bounds
@@ -193,6 +235,11 @@ def near(bbox: list[float], others: dict[str, list[float]]) -> list[str]:
     return [
         k for k, (w2, s2, e2, n2) in others.items() if w2 <= e and w <= e2 and s2 <= n and s <= n2
     ]
+
+
+def clipped_outline(iso3: str) -> BaseGeometry:
+    """The outline a built country's pack was clipped to (ingest/overlaps.py)."""
+    return outline_shape(clip_path(iso3))
 
 
 def rasters_for(iso3: str, source: str | None = None, *, cached_only: bool = False) -> list[str]:
@@ -232,7 +279,7 @@ def main(
             # are whatever can touch it.
             focus_boxes = [boxes[c] if c in boxes else list(outlines[c].bounds) for c in focus]
             codes = sorted({k for b in focus_boxes for k in near(b, boxes)} | (focus & set(built)))
-        outlines |= {iso3: load_outline(iso3) for iso3 in codes}
+        outlines |= {iso3: clipped_outline(iso3) for iso3 in codes}
     console.print(f"{len(outlines)} outlines loaded in {time.time() - t0:.0f} s")
     with console.status("Finding overlaps"):
         found = overlaps(outlines, focus)
@@ -245,35 +292,7 @@ def main(
         for pair in found
         for iso3 in pair
     }
-    # One job per country: its raster is read once for all of its overlaps. Biggest
-    # rasters first, so the long ones start early.
-    by_country: dict[str, dict] = defaultdict(dict)
-    for pair, area in found.items():
-        for iso3 in pair:
-            by_country[iso3][pair] = area
-
-    def size(iso3: str) -> int:
-        return sum(
-            Path(p.split("!")[0].removeprefix("zip://")).stat().st_size for p in rasters[iso3]
-        )
-
-    people: dict[tuple[str, str, str], float | None] = {
-        (a, b, iso3): None for (a, b) in found for iso3 in (a, b) if not rasters[iso3]
-    }
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        jobs = {
-            pool.submit(raster_people, rasters[iso3], areas): iso3
-            for iso3, areas in sorted(by_country.items(), key=lambda kv: -size(kv[0]))
-            if rasters[iso3]
-        }
-        with console.status("Reading rasters") as status:
-            for n, job in enumerate(as_completed(jobs), 1):
-                iso3 = jobs[job]
-                for (a, b), value in job.result().items():
-                    people[(a, b, iso3)] = value
-                status.update(f"Reading rasters: {n}/{len(jobs)} countries")
-                if not console.is_terminal:
-                    print(f"{n}/{len(jobs)} {iso3} done at {time.time() - t0:.0f} s", flush=True)
+    people = read_people(found, rasters, workers, t0)
     results = [
         Overlap(a, b, area_km2(mapping(area)), people[(a, b, a)], people[(a, b, b)])
         for (a, b), area in found.items()
