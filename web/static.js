@@ -16,7 +16,12 @@
  *
  * Memory: only the one resolution a query reads is kept from each part, and only up to
  * MEMORY_BUDGET (see there). country() answers for a whole country straight from its
- * packs, with no outline: the country picker in app.js. */
+ * packs, with no outline: the country picker in app.js.
+ *
+ * A deploy that rebuilds a country renames its pack files (they are named by content), so
+ * a page loaded before it asks for files that are gone. A 404 on a pack makes a query read
+ * the catalogue again and run once more (F-31); the page gets a "tally:data-updated"
+ * event, and app.js offers a reload. */
 
 const TallyStatic = (() => {
   // ingest/resolve.py
@@ -133,7 +138,7 @@ const TallyStatic = (() => {
     const magic = String.fromCharCode(...new Uint8Array(raw, 0, 4));
     if (magic !== "TLYP") throw new Error("not a Tally data pack");
     if (dv.getUint16(4, true) !== PACK_MAJOR)
-      throw new Error("This data needs a newer version of Tally. Reload to update.");
+      throw new DataUpdatedError("Tally has been updated. Reload to get the latest.");
     const n = dv.getUint32(8, true);
     const header = JSON.parse(new TextDecoder().decode(new Uint8Array(raw, 12, n)));
     const start = Math.ceil((12 + n) / 8) * 8;
@@ -162,11 +167,34 @@ const TallyStatic = (() => {
     }
   }
 
+  // A pack the catalogue this page read lists, but the host no longer has: renamed by a
+  // later deploy. Never shown as it is; withFreshCatalog() reads the catalogue again.
+  class PackGoneError extends Error {
+    constructor(part) {
+      super(`${part.name} data has moved`);
+      this.name = "PackGoneError";
+      this.part = part;
+    }
+  }
+  // What a query ends with when the data changed under the page and a retry could not
+  // make up for it: app.js shows the message with a Reload button.
+  class DataUpdatedError extends Error {
+    constructor(message = "Tally's data has been updated. Reload to get the latest.") {
+      super(message);
+      this.name = "DataUpdatedError";
+    }
+  }
+  const isGone = (err) => err?.name === "PackGoneError";
+
   // Stream the file so the caller can show progress; `no-store` keeps a second copy out
   // of the HTTP cache, since IndexedDB already holds one.
   async function download(part, onBytes) {
     const r = await fetch(new URL(part.url, catalogBase), { cache: "no-store" });
-    if (!r.ok) throw new Error(`${part.name} data: HTTP ${r.status}`);
+    if (r.status === 404 || r.status === 410) throw new PackGoneError(part);
+    if (!r.ok) {
+      console.warn(`${part.url}: HTTP ${r.status}`);
+      throw new Error(`Could not download ${part.name} data. Check the connection and try again.`);
+    }
     const chunks = [];
     let got = 0;
     const reader = r.body.getReader();
@@ -286,6 +314,9 @@ const TallyStatic = (() => {
       if (s.status === "fulfilled") got.set(needed[i].url, s.value);
       else failed.push({ part: needed[i], error: s.reason });
     });
+    // A renamed pack is not "missing": the caller reads the catalogue again and retries.
+    const gone = failed.find((f) => isGone(f.error));
+    if (gone) throw gone.error;
     if (failed.length && !got.size) throw failed[0].error;
     return { got, failed };
   }
@@ -296,38 +327,101 @@ const TallyStatic = (() => {
     if (stale.length) await idb("readwrite", (s) => stale.forEach((k) => s.delete(k)));
   }
 
+  // `cache: "no-cache"` asks the host whether the file changed (a 304 if not), so a
+  // page never reads a catalogue its browser kept from an earlier deploy.
   async function getJson(url) {
-    const r = await fetch(url);
+    const r = await fetch(url, { cache: "no-cache" });
     if (!r.ok) throw new Error(`${url.pathname}: HTTP ${r.status}`);
     return r.json();
+  }
+
+  const dataUrl = () => document.querySelector('meta[name="tally-data"]').content;
+
+  // The manifest and catalogue, read and checked; nothing is changed until both are in.
+  async function readCatalog(manifestUrl) {
+    const base = new URL(manifestUrl, location.href);
+    const m = await getJson(base);
+    const cBase = new URL(m.catalog, base);
+    const c = await getJson(cBase);
+    if (c.format?.[0] !== PACK_MAJOR)
+      throw new DataUpdatedError("Tally has been updated. Reload to get the latest.");
+    m.min_resolution = c.min_resolution;
+    m.nodataUrl = new URL(m.nodata, base).href;
+    return { m, cBase, c };
+  }
+
+  // Index a catalogue's parts, replacing any read before. Tables already unpacked stay:
+  // they are keyed by file name, and a name always means the same content.
+  function install({ m, cBase, c }) {
+    manifest = m;
+    catalogBase = cBase;
+    catalog = c;
+    parts.clear();
+    byRoot.clear();
+    for (const country of catalog.countries) {
+      for (const p of country.parts) {
+        const part = {
+          ...p,
+          iso3: country.iso3,
+          name: country.name,
+          maxRes: country.max_resolution,
+          source: country.source,
+        };
+        parts.set(part.url, part);
+        for (const root of p.footprint) {
+          if (!byRoot.has(root)) byRoot.set(root, []);
+          byRoot.get(root).push(part);
+        }
+      }
+    }
+    pruneStored().catch((err) => console.warn("could not tidy stored data:", err));
   }
 
   function load(manifestUrl) {
     if (ready) return ready;
     ready = (async () => {
-      const base = new URL(manifestUrl, location.href);
-      manifest = await getJson(base);
-      catalogBase = new URL(manifest.catalog, base);
-      catalog = await getJson(catalogBase);
-      if (catalog.format?.[0] !== PACK_MAJOR)
-        throw new Error("This data needs a newer version of Tally. Reload to update.");
-      for (const c of catalog.countries) {
-        for (const p of c.parts) {
-          const part = { ...p, iso3: c.iso3, name: c.name, maxRes: c.max_resolution, source: c.source };
-          parts.set(part.url, part);
-          for (const root of p.footprint) {
-            if (!byRoot.has(root)) byRoot.set(root, []);
-            byRoot.get(root).push(part);
-          }
-        }
-      }
-      manifest.min_resolution = catalog.min_resolution;
-      manifest.nodataUrl = new URL(manifest.nodata, base).href;
-      pruneStored().catch((err) => console.warn("could not tidy stored data:", err));
+      install(await readCatalog(manifestUrl));
       return manifest;
     })();
     ready.catch(() => (ready = null)); // let a later call retry after a network blip
     return ready;
+  }
+
+  // Read the manifest and catalogue again; true when they are not the ones this page has
+  // (another build date, or other pack files), and then tell the page.
+  async function refresh() {
+    await load(dataUrl());
+    const fresh = await readCatalog(dataUrl());
+    const names = (c) => c.countries.flatMap((x) => x.parts.map((p) => p.url)).join(" ");
+    const changed = fresh.m.built !== manifest.built || names(fresh.c) !== names(catalog);
+    if (changed) {
+      install(fresh);
+      window.dispatchEvent(new CustomEvent("tally:data-updated"));
+    }
+    return changed;
+  }
+
+  // Run `ask`; if a pack it needs has been renamed, read the catalogue again and run it
+  // once more. A second miss, or a 404 with nothing new in the catalogue, ends in words a
+  // person can act on, never an HTTP status.
+  async function withFreshCatalog(ask) {
+    try {
+      return await ask();
+    } catch (err) {
+      if (!isGone(err)) throw err;
+      let changed;
+      try {
+        changed = await refresh();
+      } catch (_) {
+        throw new DataUpdatedError();
+      }
+      if (!changed) throw new DataUpdatedError(`Could not download ${err.part.name} data. Reload to try again.`);
+      try {
+        return await ask();
+      } catch (err2) {
+        throw isGone(err2) ? new DataUpdatedError() : err2;
+      }
+    }
   }
 
   // ---- the resolver (ingest/resolve.py) ------------------------------------------------
@@ -416,9 +510,13 @@ const TallyStatic = (() => {
   }
 
   // onProgress({ received, total, names }) reports downloads while they run.
-  async function query(geojson, detail = 0, onProgress = () => {}) {
+  function query(geojson, detail = 0, onProgress = () => {}) {
+    return withFreshCatalog(() => queryOnce(geojson, detail, onProgress));
+  }
+
+  async function queryOnce(geojson, detail, onProgress) {
     const t0 = performance.now();
-    await load(document.querySelector('meta[name="tally-data"]').content);
+    await load(dataUrl());
     const geometry = unwrap(geojson);
     if (!(detail >= 0 && detail <= MAX_DETAIL)) throw new Error(`detail must be between 0 and ${MAX_DETAIL}`);
     const area = polygonAreaKm2(geometry);
@@ -491,7 +589,11 @@ const TallyStatic = (() => {
 
   // Saving only stores the files (checked against their hashes); nothing is unpacked
   // into memory until a query reads it.
-  async function saveCountry(iso3, onProgress = () => {}) {
+  function saveCountry(iso3, onProgress = () => {}) {
+    return withFreshCatalog(() => saveOnce(iso3, onProgress));
+  }
+
+  async function saveOnce(iso3, onProgress) {
     await ready;
     const have = new Set(await storedKeys());
     const todo = [...parts.values()].filter((p) => p.iso3 === iso3 && !have.has(p.url));
@@ -539,9 +641,13 @@ const TallyStatic = (() => {
   // no polyfill, so the total is the country's exactly (every level of a pack sums to it)
   // and a cell on the border carries only this country's people. Same answer shape as
   // query(), plus `country`.
-  async function country(iso3, detail = 0, onProgress = () => {}) {
+  function country(iso3, detail = 0, onProgress = () => {}) {
+    return withFreshCatalog(() => countryOnce(iso3, detail, onProgress));
+  }
+
+  async function countryOnce(iso3, detail, onProgress) {
     const t0 = performance.now();
-    await load(document.querySelector('meta[name="tally-data"]').content);
+    await load(dataUrl());
     const c = catalog.countries.find((x) => x.iso3 === iso3);
     if (!c) throw new Error(`No data for ${iso3}`);
     if (!c.cells_by_resolution || !c.area_km2)
@@ -585,5 +691,9 @@ const TallyStatic = (() => {
   // What the memory cap is holding, for scripts/browser_countries.py and for debugging.
   const memory = () => ({ tables: tables.size, bytes: tableBytes, budget: MEMORY_BUDGET });
 
-  return { load, query, country, countries, saveCountry, removeCountry, memory };
+  // Whether the data changed since this page read it (app.js asks when the tab comes
+  // back); fires "tally:data-updated" when it has. Quietly false offline.
+  const checkForUpdate = () => refresh().catch(() => false);
+
+  return { load, query, country, countries, saveCountry, removeCountry, memory, checkForUpdate };
 })();

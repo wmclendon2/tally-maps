@@ -116,7 +116,7 @@ None of these are tracked by git.
 - **"Address already in use"**: another program uses port 8081. Use `make demo PORT=8090`
   and open http://127.0.0.1:8090.
 - **The page does not change after a rebuild.** The app caches itself to work offline.
-  Reload the page; if it says "App out of date. Reload to update.", reload again. Make sure
+  Reload the page; if it says "Tally has been updated", press Reload. Make sure
   the server is still running: with it stopped, the cached app keeps opening from memory.
 - **A download fails** (a network error or a timeout). Run the same command again; finished
   countries are kept, and downloads are retried.
@@ -157,6 +157,7 @@ make verify COUNTRIES="CMR"     # the country's total from its outline, reconcil
 make browser-setup              # once: the headless Chromium the browser checks use
 make site && make parity        # the browser's answers equal the Python resolver's
 make countries-check            # every country in dist/, and the page's memory use
+make update-check               # a tab left open survives a release (new version, new data)
 make overlaps                   # people counted in two countries where outlines overlap
 ```
 

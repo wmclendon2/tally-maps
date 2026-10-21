@@ -235,6 +235,16 @@ button:disabled { opacity: .45; cursor: default; }
 .meta dt { color: var(--muted); }
 .meta dd { margin: 0; font-variant-numeric: tabular-nums; }
 
+/* "A new version of Tally is available." (app.js, F-31): first in the panel, and kept on a
+   folded phone sheet, so it is seen wherever the panel is. */
+.update {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 0 12px; padding: 8px 8px 8px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--paper-solid));
+  font-size: 13px; line-height: 1.3;
+}
+.update button { flex: none; }
+
 .status { margin-top: 12px; font-size: 13px; color: var(--muted); }
 .status:empty { display: none; }
 .status.error { color: var(--error); }
@@ -296,7 +306,7 @@ button:disabled { opacity: .45; cursor: default; }
   .maplibregl-ctrl-scale { display: none; }
 
   /* Folded: the number and what it counted, nothing else (app.js setCollapsed). */
-  #panel.collapsed > :not(.grabber, .brand, #result, #status) { display: none; }
+  #panel.collapsed > :not(.grabber, .brand, #result, #status, #update) { display: none; }
   #panel.collapsed.has-result > .brand { display: none; }
   #panel.collapsed #result { margin-top: 0; padding-top: 0; border-top: 0; }
   #panel.collapsed #result > :not(.count) { display: none; }
@@ -304,7 +314,7 @@ button:disabled { opacity: .45; cursor: default; }
   #panel.collapsed .count-value { font-size: 34px; }
   /* Placing a shape or a point: only that tool, so the map is free to work on. */
   #panel.tool-only { padding-top: 2px; }
-  #panel.tool-only > :not(.mode-pane, #status) { display: none; }
+  #panel.tool-only > :not(.mode-pane, #status, #update) { display: none; }
   #panel.tool-only.has-result .how { display: block; margin-bottom: 10px; }
 }
 

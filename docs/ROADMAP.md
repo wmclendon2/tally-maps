@@ -35,7 +35,6 @@ but it is a deliberate choice.
 | F-27 | Continuous integration: tests and lint on every push | Shaped (level 1 shipped) | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
-| F-31 | A tab left open survives a deploy: "new version" notice, retry on a renamed pack | Shaped | S | ★★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
@@ -249,6 +248,10 @@ Candidates still open:
   when it is reloaded.
 - **Decided 2026-10-20 (maintainer):** both parts below; keep the shape across the reload;
   never reload by itself; the notice shows on phones too.
+- **Shipped 2026-10-20 (shell v45):** as below. `scripts/browser_update.py` (`make
+  update-check`) runs the checks; with the retry switched off, the rebuilt-country and
+  lost-pack cases fail as they should. Tabs opened before v45 have none of this; the first
+  release after v45 is the first a tab can be told about.
 - **Approach (all in the browser, only Tally's own files):**
   1. **Say a new version is ready, like a web app does.** A line in the panel, "A new
      version of Tally is available.", with a Reload button. It shows when a new service
@@ -400,3 +403,4 @@ Candidates still open:
 | —    | Whole people in every hexagon: no "0 people" or fractions; packs 35% smaller                                                          | 2026-10-18 |
 | F-27 | Continuous integration, level 1: lint and tests on every push and pull request | 2026-10-20 |
 | F-30 | Outline overlaps split along CGAZ: no one counted in two countries (1.67 M were) | 2026-10-20 |
+| F-31 | A tab left open survives a release: "new version" notice, retry on a renamed pack, the count kept across Reload | 2026-10-20 |

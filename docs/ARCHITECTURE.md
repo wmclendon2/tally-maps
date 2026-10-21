@@ -128,9 +128,17 @@ one level, with no outline or polyfill.
 `style.css?v=N`, and `sw.js` sets `SHELL_VERSION = "N"`. Both change together on every change
 to one of those files (`tests/test_web_shell.py` fails if they drift). This exists because a
 cached `app.js` once paired with a newer page that no longer sent a field it read: the map
-went black and nothing said why. The app now says "App out of date. Reload to update." when
-an answer is missing a field it needs. The service worker never caches packs (they live in
-IndexedDB) or tiles.
+went black and nothing said why. The app now says "Tally has been updated. Reload to get the
+latest." when an answer is missing a field it needs. The service worker never caches packs
+(they live in IndexedDB) or tiles.
+
+**A tab left open across a release** (F-31). A page keeps the scripts and catalogue it
+loaded, and a deploy that rebuilds a country renames its pack files. So a 404 on a pack
+makes `static.js` read the catalogue again and run the query once more, and the panel says
+"A new version of Tally is available." with a Reload button when the data changed or a
+newer service worker took over (the page asks the worker its version: `sw.js` answers
+"version"). It looks for a new worker when the tab comes back into view and hourly. Reload
+keeps what was counted (`sessionStorage`); the page never reloads by itself.
 
 **Earlier design.** Tally began with a PostGIS database and an API serving the same cells.
 The static app replaced it: it answers the same questions with no server, works offline,

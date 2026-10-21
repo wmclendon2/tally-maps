@@ -33,8 +33,14 @@ Read it before changing the pipeline, the pack format or the resolver.
   (`tests/test_web_shell.py` fails if they drift). Only navigations use `ignoreSearch`
   offline, so a stale asset never stands in for a versioned one.
 - Never remove an answer field a cached app reads: for an installed PWA that is a breaking
-  change. app.js raises `StaleAppError` ("App out of date. Reload to update.") when an
-  answer lacks `base_resolution`/`total` or a cell lacks `h3`/`population`.
+  change. app.js raises `StaleAppError` ("Tally has been updated. Reload to get the
+  latest.", with the Reload notice) when an answer lacks `base_resolution`/`total` or a cell
+  lacks `h3`/`population`.
+- A tab open across a deploy (F-31): a 404 on a pack makes static.js reread the catalogue
+  and retry once (`withFreshCatalog`); errors a person sees never carry an HTTP status. The
+  "new version" notice compares the worker's `SHELL_VERSION` (sw.js answers "version")
+  with the page's `?v=`; Reload keeps the count in `sessionStorage`. Checked by
+  `scripts/browser_update.py`.
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
   `tolerance: 0` on the `population-cells` source (otherwise sub-pixel hexes vanish when
   zoomed out).
@@ -111,7 +117,9 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
 - Parity: `UV_CACHE_DIR=.uv-cache uv run --group browser python scripts/browser_parity.py [--dist DIR]`
 - Country check + memory: `UV_CACHE_DIR=.uv-cache uv run --group browser python
   scripts/browser_countries.py [--dist DIR] [--country XXX] [--max-mb 200] [--no-stress]`
-  (both run in the sandbox: they serve on a local port inside the process).
+  and `scripts/browser_update.py [--dist DIR]` (a tab left open across a release, F-31;
+  needs three one-part countries in the build). All three run in the sandbox: they serve
+  on a local port inside the process.
 - Verify: `UV_CACHE_DIR=.uv-cache uv run python scripts/verify_country.py --country CMR`
   and `scripts/verify_cities.py [--country XXX] [--min-pop 0]`.
 - Catalogue: `uv run python -m ingest.hdx` (Meta's countries and download sizes).

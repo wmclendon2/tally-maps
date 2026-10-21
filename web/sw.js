@@ -11,7 +11,7 @@
 // apart. The query string is what stops a freshly fetched index.html from pairing with a stale cached
 // app.js: a mismatched pair once shipped black hexagons and a dead detail toggle with no
 // error at all, because the old script read a field the new answers no longer carried.
-const SHELL_VERSION = "44";
+const SHELL_VERSION = "45";
 const CACHE = `tally-shell-v${SHELL_VERSION}`;
 const SHELL = [
   "./",
@@ -52,6 +52,12 @@ self.addEventListener("activate", (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
+});
+
+// app.js asks which version took over the page, so it offers a reload only when this
+// worker is newer than the page's own scripts (F-31), not on a first visit or a reload.
+self.addEventListener("message", (event) => {
+  if (event.data === "version") event.ports[0]?.postMessage(SHELL_VERSION);
 });
 
 function isShellRequest(url) {

@@ -495,6 +495,102 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// ---- a new version (F-31) ---------------------------------------------------------
+// A tab keeps the scripts and the catalogue it loaded. Every release changes sw.js, and the
+// new worker takes over open tabs (it skips waiting), so when the worker in charge is newer
+// than this page's scripts, or the data changed under the page (static.js), the panel says
+// so with a Reload button. Reload keeps the count. The page never reloads by itself: it
+// may be being read. An open tab rarely looks for a new worker, so it asks on coming back
+// to the tab and hourly while it stays in view.
+const PAGE_VERSION = Number(
+  new URL(document.querySelector('script[src^="app.js"]').src).searchParams.get("v"),
+);
+const UPDATE_EVERY_MS = 60 * 60 * 1000;
+const UPDATE_ON_RETURN_MS = 5 * 60 * 1000; // not on every switch between tabs
+let lastUpdateCheck = Date.now();
+
+function showUpdate(text = "A new version of Tally is available.") {
+  $("update-text").textContent = text;
+  $("update").hidden = false;
+}
+
+// The version of the worker in charge (sw.js answers "version"), or null.
+function workerVersion(worker) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = (e) => resolve(Number(e.data));
+    worker.postMessage("version", [channel.port2]);
+    setTimeout(() => resolve(null), 3000);
+  });
+}
+
+// A first visit, or a reload that fetched this version, also hands the page to a worker:
+// only one newer than the page means there is something to reload for.
+async function checkWorker() {
+  const worker = navigator.serviceWorker?.controller;
+  const v = worker && (await workerVersion(worker));
+  if (v > PAGE_VERSION) showUpdate();
+}
+
+function checkForUpdate() {
+  lastUpdateCheck = Date.now();
+  navigator.serviceWorker
+    ?.getRegistration()
+    .then((reg) => reg?.update())
+    .catch(() => {}); // offline: nothing to say
+  TallyStatic.checkForUpdate();
+}
+
+navigator.serviceWorker?.addEventListener("controllerchange", checkWorker);
+window.addEventListener("tally:data-updated", () => showUpdate());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - lastUpdateCheck > UPDATE_ON_RETURN_MS)
+    checkForUpdate();
+});
+setInterval(() => {
+  if (document.visibilityState === "visible") checkForUpdate();
+}, UPDATE_EVERY_MS);
+
+// What is counted, kept for this tab across the reload: the shape, the circle or the
+// country. The tab (Shape, Radius, Country) and the settings are kept already.
+const KEPT_COUNT = "tally-kept-count";
+function keepCount() {
+  const kept = lastCountry
+    ? { country: lastCountry }
+    : radiusCenter
+      ? { center: radiusCenter, km: radiusKm }
+      : lastGeometry
+        ? { geometry: lastGeometry }
+        : null;
+  try {
+    if (kept) sessionStorage.setItem(KEPT_COUNT, JSON.stringify(kept));
+  } catch (_) {}
+}
+
+function restoreCount() {
+  let kept = null;
+  try {
+    kept = JSON.parse(sessionStorage.getItem(KEPT_COUNT));
+    sessionStorage.removeItem(KEPT_COUNT);
+  } catch (_) {}
+  if (kept?.country) queryCountry(kept.country, { frame: true });
+  else if (kept?.center) {
+    radiusCenter = kept.center;
+    radiusKm = kept.km;
+    showRadius();
+    queryRadius();
+  } else if (kept?.geometry) {
+    const feature = { type: "Feature", properties: {}, geometry: kept.geometry };
+    map.getSource(SKETCH_SOURCE)?.setData({ type: "FeatureCollection", features: [feature] });
+    queryPopulation(kept.geometry);
+  }
+}
+
+$("update-reload").addEventListener("click", () => {
+  keepCount();
+  location.reload();
+});
+
 // Install lives in the ? sheet, not the toolbar: next to Draw and Clear it read as part of
 // the map tools, and "Install" was easy to confuse with saving a country's data.
 // Chromium fires beforeinstallprompt when the page qualifies; elsewhere the sheet says
@@ -879,6 +975,7 @@ function continentGroup(continent, countries) {
         await run();
       } catch (err) {
         state.textContent = `Failed: ${err.message}`;
+        if (err.name === "DataUpdatedError") showUpdate(err.message);
         savingContinent = null;
         for (const x of summary.querySelectorAll("button")) x.disabled = false;
         return;
@@ -953,6 +1050,7 @@ function savedRow(c) {
         await run();
       } catch (err) {
         state.textContent = `Failed: ${err.message}`;
+        if (err.name === "DataUpdatedError") showUpdate(err.message);
         for (const x of li.querySelectorAll("button")) x.disabled = false;
         return;
       }
@@ -1027,7 +1125,11 @@ async function showStaticData() {
   );
   const [w, s, e, n] = m.bbox;
   map.fitBounds([[w, s], [e, n]], { padding: panelPadding(), duration: 0 });
-  fillPicker().catch((err) => console.warn("country picker:", err));
+  // A count kept across a reload comes back once the picker is filled (a country needs it).
+  fillPicker()
+    .catch((err) => console.warn("country picker:", err))
+    .finally(restoreCount);
+  checkWorker();
 }
 
 // The country picker: every country in the data, by continent then name, as the ? panel
@@ -1128,7 +1230,7 @@ function setFineAvailable(available) {
 // error, so say it plainly instead.
 class StaleAppError extends Error {
   constructor() {
-    super("App out of date. Reload to update.");
+    super("Tally has been updated. Reload to get the latest.");
     this.name = "StaleAppError";
   }
 }
@@ -1187,10 +1289,11 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
     if (bounds) map.fitBounds(bounds, { padding: panelPadding(), maxZoom });
   } catch (err) {
     if (err.name === "AbortError") return;
-    setStatus(
-      err.name === "StaleAppError" ? err.message : `Query failed: ${err.message}`,
-      true,
-    );
+    // Out of date, or the data changed under the page: said in the notice, with Reload.
+    if (err.name === "StaleAppError" || err.name === "DataUpdatedError") {
+      setStatus("");
+      showUpdate(err.message);
+    } else setStatus(`Query failed: ${err.message}`, true);
   } finally {
     if (inflight === controller) {
       inflight = null;

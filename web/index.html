@@ -33,13 +33,19 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=44">
+  <link rel="stylesheet" href="style.css?v=45">
 </head>
 <body>
   <div id="map"></div>
 
   <aside id="panel">
     <button id="sheet-toggle" class="grabber" aria-expanded="true" aria-label="Show less"></button>
+    <!-- A tab left open across a release (F-31): app.js shows this when a newer version has
+         taken over, or the data changed under the page. Reload keeps the count. -->
+    <div id="update" class="update" role="status" hidden>
+      <span id="update-text">A new version of Tally is available.</span>
+      <button id="update-reload" class="primary small" type="button">Reload</button>
+    </div>
     <header class="brand">
       <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
         <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="#980043"/>
@@ -283,7 +289,7 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=44"></script>
-  <script src="app.js?v=44"></script>
+  <script src="static.js?v=45"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>
