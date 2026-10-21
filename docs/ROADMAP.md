@@ -35,7 +35,7 @@ but it is a deliberate choice.
 | F-27 | Continuous integration: tests and lint on every push | Shaped (level 1 shipped) | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
-| F-31 | "New version available" notice for a tab left open | Inbox | S | ★ | ✅ | — |
+| F-31 | A tab left open survives a deploy: "new version" notice, retry on a renamed pack | Shaped | S | ★★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
@@ -237,6 +237,55 @@ Candidates still open:
   - **Result:** the audit finds 0 people counted twice (was 1,673,012); the world total
     fell by 1,713,213; every check passes (VERIFICATION.md, "The split").
 
+### F-31 A tab left open survives a deploy
+- **Why:** a page reads the catalogue once, when it loads, and packs are named by their
+  content, so a deploy that rebuilds a country renames its files. A tab opened before the
+  deploy then asks for files that are gone: on 2026-10-20 Puerto Rico answered "Query
+  failed: Puerto Rico data: HTTP 404" on tallymaps.org in a tab older than the 2026-10-19
+  deploy, which made no sense to the person reading it. A shape over several countries
+  says "At least N" and names the missing one. An installed app is the same, and stays
+  open longest. Every data deploy does this (whole people renamed every pack, F-30 132
+  countries'), and a release with new features but no new data reaches an open tab only
+  when it is reloaded.
+- **Decided 2026-10-20 (maintainer):** both parts below; keep the shape across the reload;
+  never reload by itself; the notice shows on phones too.
+- **Approach (all in the browser, only Tally's own files):**
+  1. **Say a new version is ready, like a web app does.** A line in the panel, "A new
+     version of Tally is available.", with a Reload button. It shows when a new service
+     worker takes over the page (`controllerchange`; the worker already skips waiting and
+     claims open tabs), which every release does, new data or not, since any change to the
+     app bumps `sw.js`; and when the retry below finds a newer catalogue. An open tab rarely
+     looks for a new worker, so the page calls `registration.update()` (one small request
+     for `sw.js`) on returning to the tab (`visibilitychange`) and once an hour while it
+     stays visible: a tab left on a second screen never comes back to. Offline, the checks
+     fail quietly and nothing shows. On phones the line shows even with the bottom sheet
+     folded, as a thin bar at the top of its visible part.
+  2. **Retry on a renamed pack, so the 404 never reaches anyone.** When a part download
+     returns 404, `static.js` fetches the manifest and catalogue again (`cache:
+     "no-cache"`, a 304 when nothing changed), rebuilds its part index, prunes stored parts
+     the new catalogue no longer lists (as at load), and runs the query once more. The
+     user sees the right number, a moment late, and the notice. If it still fails, the
+     message says so in plain words, never an HTTP status: "Tally's data has been updated.
+     Reload to get the latest.", with the same Reload button. `StaleAppError`'s "App out of
+     date. Reload to update." gets the same wording and button.
+  3. **Reload keeps the shape.** The drawn shape or circle (and the tab: Shape, Radius,
+     Country) is kept in `sessionStorage` for that tab and restored after the reload, so
+     Reload comes back to the same count. Never reload by itself: a page that reloads while
+     it is being read is jarring, and one tap costs nothing once the shape is kept.
+- **Not changed:** the shell versioning stays; the retry is in `static.js` alone, so
+  `ingest/resolve.py` and the parity checks are unaffected. A `static.js`/`app.js` change
+  bumps the shell (v45).
+- **Checks:** a browser check that serves a build and loads the page, then without
+  reloading: (a) bumps the shell only (a new feature, no new data) and expects the notice
+  after a visibility change; (b) swaps in a rebuilt country (new catalogue, new pack
+  names, old files deleted) and expects the right total with no error, then the notice;
+  (c) presses Reload and expects the same shape and count back. Run it with the other
+  browser checks.
+- **Effort:** S: about one session, plus the browser check.
+- **Privacy:** ✅. The checks fetch Tally's own `sw.js`, manifest and catalogue; they add
+  requests to the host's counts, but no page view (the hosted site's analytics count page
+  loads only). The kept shape stays in that tab's `sessionStorage`, on the device.
+
 ## Notes on Inbox items
 
 - **F-04:** PNG export (Save image) shipped 2026-09-18; this item is the data formats,
@@ -258,9 +307,6 @@ Candidates still open:
   between a Meta country and a WorldPop one.
 - **F-29:** record each pack's source file address (HDX or WorldPop) and the download's
   sha256 in its header and the catalogue: a pack format minor bump.
-- **F-31:** a tab keeps the version it loaded until it is reloaded. Show a small "New
-  version available, reload" notice when a new service worker takes over, or when the
-  catalogue changes.
 - **F-32:** for the maintainer's own understanding, and to inform whether Tally should
   eventually move to WorldPop altogether now that Meta's maps are no longer updated
   (background: [DATA_SOURCES.md](DATA_SOURCES.md)). A script beside `verify_country.py`
