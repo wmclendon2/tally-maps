@@ -3,7 +3,7 @@
 """HTTP fetching for every download: curl first, urllib as a fallback.
 
 curl is preferred because some filtering proxies truncate HTTP/1.1 bodies from
-urllib a few KB short without signalling an error (CLAUDE.md); curl speaks HTTP/2,
+urllib a few KB short without signaling an error (CLAUDE.md); curl speaks HTTP/2,
 follows redirects, and resumes partial files.
 
 Everything here retries. geoBoundaries' GeoJSON lives on GitHub's Git LFS media

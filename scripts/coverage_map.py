@@ -11,7 +11,7 @@ docs/img/coverage.json records the same state as data.
 Two layers, because "available" and "loaded" are different questions:
 
   available  `scripts/build_packs.py --country XXX` would work: the country has a
-             general-population GeoTIFF in Meta's HDX catalogue (read live from HDX),
+             general-population GeoTIFF in Meta's HDX catalog (read live from HDX),
              or build_packs.SOURCE_FOR builds it from WorldPop.
   loaded     the country has a built pack in data/packs/catalog.json; --loaded takes
              an explicit list instead.
@@ -87,6 +87,7 @@ def fetch_world(path: Path = NE_CACHE) -> list[Country]:
     for f in doc["features"]:
         props, geom = f["properties"], f.get("geometry")
         iso3 = (props.get("ADM0_A3") or "").upper()
+        iso3 = continents.NATURAL_EARTH_CODE.get(iso3, iso3)
         if not geom or len(iso3) != 3:
             continue
         parts = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
@@ -115,7 +116,7 @@ def worldpop_countries() -> set[str]:
 
 
 def packed_countries(root: Path | None = None) -> tuple[set[str], str]:
-    """Countries with a built pack, from the pack catalogue. Whatever the pack's source:
+    """Countries with a built pack, from the pack catalog. Whatever the pack's source:
     the app serves them all (Jersey's is WorldPop's, since Meta's file lacks the island)."""
     from build_packs import PACK_CACHE
 
@@ -249,8 +250,8 @@ def render(
         (NO_DATA, "Not available yet"),
     ]
     x = pad
-    for colour, label in legend:
-        draw.rectangle([x, y, x + swatch, y + swatch], fill=colour, outline="#00000022")
+    for color, label in legend:
+        draw.rectangle([x, y, x + swatch, y + swatch], fill=color, outline="#00000022")
         draw.text((x + swatch + 9 * scale, y + 1 * scale), label, font=body_f, fill=INK)
         x += swatch + 14 * scale + int(draw.textlength(label, font=body_f)) + 34 * scale
     y += 34 * scale
@@ -271,9 +272,9 @@ def render(
         for line in wrap(
             draw,
             legible(
-                # Not named: the map shows them in grey, and the roll was mostly specks.
+                # Not named: the map shows them in gray, and the roll was mostly specks.
                 f"Also absent: {len(absent_territories)} dependencies and disputed "
-                "territories, shown in grey."
+                "territories, shown in gray."
             ),
             small_f,
             W - 2 * pad,
@@ -295,7 +296,7 @@ def main(
     out: Annotated[Path, typer.Option(help="PNG to write")] = Path("docs/img/coverage-map.png"),
     width: Annotated[int, typer.Option(help="Output width in pixels")] = 2000,
     loaded: Annotated[
-        str | None, typer.Option(help="Comma-separated ISO3 list, instead of the catalogue")
+        str | None, typer.Option(help="Comma-separated ISO3 list, instead of the catalog")
     ] = None,
     show_loaded: Annotated[
         bool, typer.Option(help="Shade countries that have a built pack")
@@ -305,7 +306,7 @@ def main(
     meta = catalog_countries()
     worldpop = worldpop_countries() - meta
     available = meta | worldpop
-    console.print(f"{len(meta)} countries in the Meta HDX catalogue, {len(worldpop)} from WorldPop")
+    console.print(f"{len(meta)} countries in the Meta HDX catalog, {len(worldpop)} from WorldPop")
 
     if loaded is not None:
         have, origin = {c.strip().upper() for c in loaded.split(",") if c.strip()}, "--loaded"

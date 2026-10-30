@@ -70,7 +70,7 @@ def test_gives_up_after_attempts(monkeypatch):
 
 
 def test_short_body_is_retried(monkeypatch):
-    """The filtering proxy truncates HTTP/1.1 bodies without signalling an error."""
+    """The filtering proxy truncates HTTP/1.1 bodies without signaling an error."""
     bodies = [b"short", b"full body!"]
 
     def fake_urlopen(req, timeout=None):

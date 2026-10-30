@@ -3,7 +3,7 @@
  "_url": "https://github.com/nvkelso/natural-earth-vector",
  "_license": "public domain",
  "_fetched": "2026-09-19",
- "_note": "MYT, REU, GLP and GUF are added by hand: Natural Earth files them under France, but HDX ships them as separate ISO3 rasters. MUS, SYC and MDV are added by hand under their REGION_UN (Africa, Africa, Asia): Natural Earth's CONTINENT is \"Seven seas (open ocean)\", but they are countries with Meta rasters. Antarctica and the other open-ocean features are dropped. `type` distinguishes sovereign states from dependencies and disputed territories. ISR and KOS are typed \"Sovereign country\" by hand (Natural Earth says \"Disputed\"), so the coverage map lists them with the countries (user decision, 2026-10-13). Abbreviated Natural Earth names (\"Bosnia and Herz.\", \"St-Martin\") are replaced by its NAME_EN (NAME_LONG for N. Cyprus), COG is \"Republic of the Congo\" and SWZ \"Eswatini\" (2026-10-13).",
+ "_note": "MYT, REU, GLP and GUF are added by hand: Natural Earth files them under France, but HDX ships them as separate ISO3 rasters. MUS, SYC and MDV are added by hand under their REGION_UN (Africa, Africa, Asia): Natural Earth's CONTINENT is \"Seven seas (open ocean)\", but they are countries with Meta rasters. Antarctica and the other open-ocean features are dropped. `type` distinguishes sovereign states from dependencies and disputed territories. ISR and KOS are typed \"Sovereign country\" by hand (Natural Earth says \"Disputed\"), so the coverage map lists them with the countries (user decision, 2026-10-13). Abbreviated Natural Earth names (\"Bosnia and Herz.\", \"St-Martin\") are replaced by its NAME_EN (NAME_LONG for N. Cyprus), COG is \"Republic of the Congo\" and SWZ \"Eswatini\" (2026-10-13), PSE \"Palestinian Territories\" (2026-10-23). Keys are the codes Tally builds under: Natural Earth's SDS, PSX, SAH and ALD are filed as SSD, PSE, ESH and ALA, and Christmas Island and Cocos (IOA), Norfolk Island, Somaliland and Northern Cyprus are left out, their people being in Australia's, Somalia's and Cyprus's packs (ingest.continents.NATURAL_EARTH_CODE, 2026-10-22).",
  "countries": {
   "ABW": {
    "name": "Aruba",
@@ -25,15 +25,15 @@
    "continent": "North America",
    "type": "Dependency"
   },
+  "ALA": {
+   "name": "Åland",
+   "continent": "Europe",
+   "type": "Country"
+  },
   "ALB": {
    "name": "Albania",
    "continent": "Europe",
    "type": "Sovereign country"
-  },
-  "ALD": {
-   "name": "Åland",
-   "continent": "Europe",
-   "type": "Country"
   },
   "AND": {
    "name": "Andorra",
@@ -265,11 +265,6 @@
    "continent": "North America",
    "type": "Dependency"
   },
-  "CYN": {
-   "name": "Northern Cyprus",
-   "continent": "Asia",
-   "type": "Sovereign country"
-  },
   "CYP": {
    "name": "Cyprus",
    "continent": "Asia",
@@ -324,6 +319,11 @@
    "name": "Eritrea",
    "continent": "Africa",
    "type": "Sovereign country"
+  },
+  "ESH": {
+   "name": "Western Sahara",
+   "continent": "Africa",
+   "type": "Indeterminate"
   },
   "ESP": {
    "name": "Spain",
@@ -494,11 +494,6 @@
    "name": "India",
    "continent": "Asia",
    "type": "Sovereign country"
-  },
-  "IOA": {
-   "name": "Australian Indian Ocean Territories",
-   "continent": "Asia",
-   "type": "Dependency"
   },
   "IRL": {
    "name": "Ireland",
@@ -785,11 +780,6 @@
    "continent": "Africa",
    "type": "Sovereign country"
   },
-  "NFK": {
-   "name": "Norfolk Island",
-   "continent": "Oceania",
-   "type": "Dependency"
-  },
   "NGA": {
    "name": "Nigeria",
    "continent": "Africa",
@@ -895,8 +885,8 @@
    "continent": "South America",
    "type": "Sovereign country"
   },
-  "PSX": {
-   "name": "Palestine",
+  "PSE": {
+   "name": "Palestinian Territories",
    "continent": "Asia",
    "type": "Indeterminate"
   },
@@ -930,11 +920,6 @@
    "continent": "Africa",
    "type": "Sovereign country"
   },
-  "SAH": {
-   "name": "Western Sahara",
-   "continent": "Africa",
-   "type": "Indeterminate"
-  },
   "SAU": {
    "name": "Saudi Arabia",
    "continent": "Asia",
@@ -942,11 +927,6 @@
   },
   "SDN": {
    "name": "Sudan",
-   "continent": "Africa",
-   "type": "Sovereign country"
-  },
-  "SDS": {
-   "name": "South Sudan",
    "continent": "Africa",
    "type": "Sovereign country"
   },
@@ -980,11 +960,6 @@
    "continent": "Europe",
    "type": "Sovereign country"
   },
-  "SOL": {
-   "name": "Somaliland",
-   "continent": "Africa",
-   "type": "Sovereign country"
-  },
   "SOM": {
    "name": "Somalia",
    "continent": "Africa",
@@ -998,6 +973,11 @@
   "SRB": {
    "name": "Serbia",
    "continent": "Europe",
+   "type": "Sovereign country"
+  },
+  "SSD": {
+   "name": "South Sudan",
+   "continent": "Africa",
    "type": "Sovereign country"
   },
   "STP": {

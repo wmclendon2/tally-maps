@@ -11,7 +11,7 @@ job does, so a big country picked up last would leave the other workers idle. Co
 rasters' uncompressed size, which with strips read in file order (ingest/raster.py) tracks
 compute time at ~2.7 s/GB on an i7-7700K.
 
-The parent does all the reporting and any shared writes (build_packs' catalogue), so
+The parent does all the reporting and any shared writes (build_packs' catalog), so
 workers never race on a file. Results reach the parent in completion order.
 """
 

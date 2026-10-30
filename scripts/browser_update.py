@@ -10,9 +10,9 @@ its service worker, then changes the served copy under the open page, as a deplo
   1. First visit: no "new version" notice.
   2. A release with no new data (the shell version bumped): coming back to the tab shows
      the notice.
-  3. A rebuilt country (its pack files renamed in a new catalogue, the old ones gone): the
+  3. A rebuilt country (its pack files renamed in a new catalog, the old ones gone): the
      open page still gets the country's exact total, with no error, and the notice.
-  4. A pack gone with nothing new in the catalogue: the error says so in words, with no
+  4. A pack gone with nothing new in the catalog: the error says so in words, with no
      HTTP status in it.
   5. Reload from the notice: the same circle and count come back, and no notice.
 
@@ -72,7 +72,7 @@ def bump_shell(site: Path) -> int:
 
 
 def rename_packs(site: Path, iso3: str) -> None:
-    """A rebuilt country: new file names in a new catalogue, the old files gone."""
+    """A rebuilt country: new file names in a new catalog, the old files gone."""
     path = site / "packs" / "catalog.json"
     catalog = json.loads(path.read_text())
     entry = next(c for c in catalog["countries"] if c["iso3"] == iso3)
@@ -138,7 +138,7 @@ def run(site: Path, url: str, countries: list[dict]) -> list[str]:
         )
         page.wait_for_function(COUNTED)
         count = page.locator("#total").text_content()
-        centre = page.evaluate("radiusCenter")
+        center = page.evaluate("radiusCenter")
         page.wait_for_timeout(1000)
         check(notice.is_hidden(), "1. first visit: no notice")
 
@@ -187,7 +187,7 @@ def run(site: Path, url: str, countries: list[dict]) -> list[str]:
         page.wait_for_function(COUNTED)
         check(
             page.locator("#total").text_content() == count
-            and page.evaluate("radiusCenter") == centre,
+            and page.evaluate("radiusCenter") == center,
             f"5. reload keeps the circle and its count ({count})",
         )
         page.wait_for_timeout(1000)

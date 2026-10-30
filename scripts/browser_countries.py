@@ -5,13 +5,13 @@
     uv run --group browser python scripts/browser_countries.py \\
         [--dist dist] [--country XXX ...] [--url https://...] [--max-mb 200]
 
-Countries: for each one in the built site's catalogue, headless Chrome (fresh profile, so
+Countries: for each one in the built site's catalog, headless Chrome (fresh profile, so
 everything is downloaded) runs `TallyStatic.country`, the call behind the country picker.
 That downloads every part of the country, checks each against its SHA-256 and sums the
 level the picker shows. The answer must match the same level summed in Python from the
 same pack files: resolution, populated cells and total. Python also checks what the
-picker reads from the catalogue without downloading anything: every level of the packs
-sums to the catalogue total, `cells_by_resolution` matches the packs, and `area_km2` is
+picker reads from the catalog without downloading anything: every level of the packs
+sums to the catalog total, `cells_by_resolution` matches the packs, and `area_km2` is
 within a loose bound of Natural Earth's area for the country (a wrong outline shows up as
 a country a fraction of its size; small islands differ most, so it only warns).
 
@@ -51,7 +51,7 @@ from ingest.resolve import AUTO_TARGET_CELLS, MAX_CELLS_LIMIT
 
 console = Console()
 REL_TOL = 1e-9  # JS sums float32 cells in another order than numpy
-# The catalogue's area is the clipping outline's; Natural Earth's 50m outline is coarser
+# The catalog's area is the clipping outline's; Natural Earth's 50m outline is coarser
 # and leaves out or adds small islands, lakes and disputed land, so only a big gap means
 # something is wrong. Below MIN_AREA_KM2 the coastline is most of the country: no check.
 AREA_RATIO = (0.6, 1.6)
@@ -89,7 +89,7 @@ def country_resolution(entry: dict, detail: int = 0) -> int:
 
 
 def expected(packs: Path, entry: dict) -> tuple[dict, list[str]]:
-    """The picker's answer for one country, from its pack files, and any catalogue problems."""
+    """The picker's answer for one country, from its pack files, and any catalog problems."""
     problems = []
     counts: dict[int, int] = {}
     sums: dict[int, float] = {}
@@ -104,7 +104,7 @@ def expected(packs: Path, entry: dict) -> tuple[dict, list[str]]:
         problems.append(f"cells_by_resolution {listed} but the packs hold {counts}")
     for res, total in sums.items():
         if abs(total - entry["total"]) > max(1.0, entry["total"] * 1e-6):
-            problems.append(f"res {res} sums to {total:,.1f}, catalogue says {entry['total']:,}")
+            problems.append(f"res {res} sums to {total:,.1f}, catalog says {entry['total']:,}")
     res = country_resolution(entry)
     want = {"resolution": res, "populated_cells": counts.get(res, 0), "total": sums.get(res, 0.0)}
     return want, problems
@@ -227,7 +227,7 @@ def main(
     for iso3 in isos:
         e = entries[iso3]
         if "cells_by_resolution" not in e or "area_km2" not in e:
-            problems[iso3] = ["catalogue lacks cells_by_resolution/area_km2; rebuild"]
+            problems[iso3] = ["catalog lacks cells_by_resolution/area_km2; rebuild"]
             continue
         want[iso3], probs = expected(packs, e)
         if probs:

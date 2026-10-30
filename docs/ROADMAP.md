@@ -25,7 +25,6 @@ but it is a deliberate choice.
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
 | F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Parked | L | ★★★ | ✅ | Pack format minor bump |
 | F-09 | Compare two shapes, or one area across data years | Inbox | M | ★★ | ✅ | F-13 for years |
-| F-10 | WorldPop 100 m for countries Meta lacks | Shaped (Jersey, Canada, Greenland done) | M | ★★★ | ✅ | — (F-30 shipped) |
 | F-13 | Data versioning and refresh of saved packs | Inbox | M | ★★ | ✅ | F-29 |
 | F-16 | Embeddable widget for articles | Inbox | M | ★★ | ✅ | F-05 |
 | F-17 | Printable one-page report (PDF) for an area | Inbox | M | ★★ | ✅ | F-04 |
@@ -39,6 +38,7 @@ but it is a deliberate choice.
 | F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 | F-35 | Detail limits: measure the cost and accuracy of more cells | Inbox | S (M if it leads to a change) | ★★ | ✅ | After F-34 |
+| F-36 | WorldPop everywhere: one source for every country | Inbox (for a future decision) | M–L | ★★ | ✅ | F-32 |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
@@ -70,7 +70,7 @@ does not cover.
   - Results as a table (name, total, area, density), highlighted on the map when clicked.
   - Export to CSV, and GeoJSON with a `population` property (pairs with F-04).
   - Points with a radius, as well as polygons: much of what users hold is points
-    (people-group centres, clinics, villages, project sites). A CSV of name, latitude,
+    (people-group centers, clinics, villages, project sites). A CSV of name, latitude,
     longitude and radius (or one radius for all), each counted as a circle, in the same
     table. Added 2026-10-20.
 - **Limits to decide:** features per batch (500 to start), vertices, and features over
@@ -88,29 +88,83 @@ does not cover.
   and each clipped total compared with WorldPop's own total for the country: Canada lost
   0.02% to clipping, while Greenland's geoBoundaries coast lost 99.5% and needed Natural
   Earth.
-- **Batches:**
-  1. **Done 2026-10-18:** Canada and Greenland (Jersey 2026-10-13). On 2026-10-20 Canada's
-     clip became its outline grown 0.1° (about 10 km) and cut at the USA and Greenland
-     along CGAZ (`boundaries.CLIP_GROW_DEG`): WorldPop's files hold only their own
-     country's people, cut at the same US lines, so the grown clip takes in the coast and
-     border towns the plain outline cut off (+9,428 people) and nothing of a neighbour's.
-     The map outline, the no-data mask and the area stay plain.
-  2. **Small places with undisputed borders:** Andorra, Luxembourg, Isle of Man,
-     Montenegro, Cuba, Curaçao, Sint Maarten, Bermuda, the Falklands, Niue, Norfolk
-     Island, Saint Barthélemy, Saint-Martin, Saint Pierre and Miquelon, Christmas Island
-     and Cocos. Several need Natural Earth outlines; Natural Earth draws Christmas Island
-     and Cocos as one shape. Canada's grown clip may serve them too.
-  3. **Disputed borders, after F-30:** Pakistan and China (Kashmir, Aksai Chin,
+- **Batches** (order agreed 2026-10-20: large undisputed, then disputed, then small):
+  1. **Done 2026-10-18:** Canada and Greenland (Jersey 2026-10-13).
+  2. **Built 2026-10-20, shipped 2026-10-30 (shell v49):** Iran, Myanmar, Afghanistan,
+     Yemen and North Korea, 240 M people, each within 0.007% of WorldPop's own total;
+     Canada given the grown clip too (+9,428 people); 0 counted twice (VERIFICATION.md).
+     Decided with the maintainer: Canada gets the same rule; the general "estimates"
+     wording is enough for the old censuses; the line under a country's count already
+     names its source ("Whole country, WorldPop data from 2020"), so the picker is left
+     as it is; geoBoundaries is credited as CC BY 4.0 with each outline's source under its
+     own license (NOTICE.md lists them). Shaped as follows. Measured on WorldPop's files:
+
+     | Country | WorldPop 2020 | Download | geoBoundaries outline | Lost to that outline | Lost to the grown clip |
+     | --- | ---: | ---: | --- | ---: | ---: |
+     | Iran | 87,481,767 | 55 MB | Natural Earth 2009, public domain | 501,590 (0.57%) | 1,150 (0.001%) |
+     | Myanmar | 52,825,300 | 35 MB | OpenStreetMap 2021, CC BY-SA 2.0 | 108,343 (0.21%) | 4,591 (0.009%) |
+     | Afghanistan | 38,429,950 | 24 MB | geoBoundaries 2014, public domain | 1,215 (0.003%) | 0 |
+     | Yemen | 35,640,680 | 12 MB | OpenStreetMap 2017, ODbL | 14,144 (0.04%) | 7,454 (0.02%) |
+     | North Korea | 26,089,153 | 8 MB | WFP/OCHA 2018, CC BY 3.0 IGO | 130,089 (0.50%) | 392 (0.002%) |
+
+     - **The outlines lose people at the coast and the land borders.** Iran's
+       geoBoundaries outline is Natural Earth's, coarse enough to cut off Bandar Abbas
+       (25 k in one res-7 cell) and Iranian towns on its land borders (Parsabad, Zabol);
+       North Korea's misses Nampo, Myanmar's parts of the Irrawaddy delta. Natural Earth
+       grown out to sea (as for HKG and the others) fixes Iran's coast but loses more at
+       Myanmar's and North Korea's land borders (0.8%, 0.65%).
+     - **So: a grown clip, cut along CGAZ.** WorldPop's files hold only their own
+       country's people (they are cut at LSIB, the US State Department's line), and CGAZ
+       draws borders along the same US lines. So a WorldPop country's clip is its outline
+       grown by 0.1° (about 10 km north-south, 5.5 km east-west at 60° N), and the overlap
+       split (F-30) cuts it at each built neighbor along CGAZ, as any overlap. Everyone WorldPop counts stays in
+       (losses above, at most 0.02%), and nothing of a neighbor's comes in: its raster has
+       no one there. The outline drawn on the map, the no-data mask and the country's area
+       stay the plain geoBoundaries outline.
+     - **Neighbors:** their packs now count small numbers inside the new clips, which the
+       split gives to the new country: Bangladesh 8,852, Thailand 5,222, India 3,561, South
+       Korea 3,220, Iraq 432, Saudi Arabia 238, Turkmenistan 265, Tajikistan 156, Armenia
+       122, Turkey 16. Those packs are rebuilt; F-31 keeps open tabs working through it.
+     - **Outline licenses:** Myanmar's is CC BY-SA 2.0 and Yemen's ODbL, share-alike like
+       those of 81 built countries already (73 ODbL, 8 CC BY-SA); nothing new.
+     - **Steps:** `SOURCE_FOR` entries and a per-country grow (`CLIP_GROW_DEG`) that
+       `split_overlaps.py` and `clip_path` both use; `make split COUNTRIES="IRN MMR AFG YEM
+       PRK"`; build the five and rebuild the neighbors it names; the overlap audit (target
+       0 counted twice); each total against WorldPop's (target: under 0.03% lost);
+       `verify_country.py`, `verify_cities.py` (new cities to test), the browser checks;
+       the coverage map; About's list of WorldPop countries.
+     - **Effort:** S–M: one session, plus about an hour of machine time.
+  3. and 4. **Built 2026-10-22/23, shipped with batch 2 on 2026-10-30:** all 30
+     remaining places; Christmas Island and Cocos stay in Australia's pack and Norfolk
+     Island's WorldPop people are added to it. Decided with the maintainer, each cause
+     separately: two WorldPop countries' overlap is not cut, as no pixel is in both files
+     (measured pixel by pixel for all 15 such pairs); China's clip adds Natural Earth's coast
+     (geoBoundaries' outline lost 2.45 M) and keeps its overlap with Hong Kong and Macau
+     uncut (at most 5.4 k counted twice, by res-9 cell); a WorldPop place's Natural Earth
+     clip is not cut back at other units (Sint Maarten lost 34%); Western Sahara is the whole
+     territory (Natural Earth's is the strip east of the wall: 81% lost); Åland is
+     Finland's ADM1 unit; the Palestinian Territories' file holds East Jerusalem, which the
+     outlines draw in Israel, so its 261,554 people inside Israel's outline are in Israel's
+     pack, and the name is "Palestinian Territories". Every WorldPop country is now within 0.11% of WorldPop's own
+     total; the rest (VERIFICATION.md) is left as a known limit, with Dongxing, the southern
+     Kurils and the Halayib triangle. Where each disputed area's people are counted:
+     VERIFICATION.md.
+  3. **Disputed borders, after F-30 (as planned):** Pakistan and China (Kashmir, Aksai Chin,
      Arunachal), Azerbaijan (Karabakh), Morocco and Western Sahara, Russia and Ukraine
-     (Crimea), Israel, Palestine and Syria (the Golan), Sudan and South Sudan (Abyei),
+     (Crimea), Israel, the Palestinian Territories and Syria (the Golan), Sudan and South Sudan (Abyei),
      Cyprus, Somalia, Åland (inside Finland's outline), Venezuela (Guyana's Essequibo),
      Kosovo (`KOS` at WorldPop, `XKX` at geoBoundaries). The split follows CGAZ, and so US
      State Department lines, in disputed areas: decide that, and say it on About, first.
+  4. **Small places with undisputed borders:** Andorra, Luxembourg, Isle of Man,
+     Montenegro, Cuba, Curaçao, Sint Maarten, Bermuda, the Falklands, Niue, Norfolk
+     Island, Saint Barthélemy, Saint-Martin, Saint Pierre and Miquelon, Christmas Island
+     and Cocos. Several need Natural Earth outlines; Natural Earth draws Christmas Island
+     and Cocos as one shape. The grown clip may serve them too.
 - **Known limits:** Russia crosses the 180° meridian, which `verify_country.py` refuses,
   so it needs another total check. China's pack will be the largest. The Vatican has no
   WorldPop file; Somaliland and Northern Cyprus have no code of their own and come with
   Somalia's and Cyprus's outlines; Siachen and Ashmore have no data.
-- **Effort:** S per batch-2 country; M for F-30 and batch 3.
+- **Effort:** S–M for batch 2; M for batch 3; S per batch-4 country.
 
 ### F-25 Speed
 Aim for good Core Web Vitals (LCP < 2.5 s, INP < 200 ms, CLS < 0.1). Change one thing at a
@@ -139,7 +193,7 @@ site, and the basemap from OpenFreeMap, which is most of the bytes.
 
 **Not worth it now:** the no-data layer already loads after the map is up (108 KB);
 loading Terra Draw only for mouse drawing saves 52 KB and about 20 ms of phone CPU; the
-catalogue (66 KB) is not on the map's critical path; the fonts already swap in, and the
+catalog (66 KB) is not on the map's critical path; the fonts already swap in, and the
 first paint is the panel's text at 0.6 s.
 
 **Faster, but they change how the map looks (owner's call):**
@@ -195,7 +249,7 @@ Candidates still open:
   deleted). Level 2 waits for a browser-side change such as F-02.
 
 ### F-30 Outline overlaps: no one counted in two countries
-- **Why:** each country is clipped to its own geoBoundaries outline, and neighbouring
+- **Why:** each country is clipped to its own geoBoundaries outline, and neighboring
   outlines (from different national sources) disagree about where the border runs, so
   people in the strips between them are in both packs. Meta's files cover the country's
   bounding box, so both sides' rasters hold them.
@@ -205,7 +259,7 @@ Candidates still open:
   293,647, Cameroon–Nigeria 220,530, Argentina–Paraguay 108,023.
 - **Not chosen: geoBoundaries CGAZ as the clipping outlines.** CGAZ is a global set with
   no overlaps (disputed areas follow US State Department lines), but measured on the packs
-  (2026-10-20, by cell centre) it would drop about 20 M people (0.37%) outside its heavily
+  (2026-10-20, by cell center) it would drop about 20 M people (0.37%) outside its heavily
   simplified coasts (Philippines 3.6 M, Indonesia 3.4 M, Japan 1.9 M, Maldives 88%, Tuvalu
   96%), has no unit for 25 of Tally's territories (Puerto Rico, Hong Kong, Réunion, Guam
   ...; 14.8 M people), moves 3 M people between countries (7.7% of Bhutan to India), and
@@ -243,7 +297,7 @@ Candidates still open:
     fell by 1,713,213; every check passes (VERIFICATION.md, "The split").
 
 ### F-31 A tab left open survives a deploy
-- **Why:** a page reads the catalogue once, when it loads, and packs are named by their
+- **Why:** a page reads the catalog once, when it loads, and packs are named by their
   content, so a deploy that rebuilds a country renames its files. A tab opened before the
   deploy then asks for files that are gone: on 2026-10-20 Puerto Rico answered "Query
   failed: Puerto Rico data: HTTP 404" on tallymaps.org in a tab older than the 2026-10-19
@@ -263,16 +317,16 @@ Candidates still open:
      version of Tally is available.", with a Reload button. It shows when a new service
      worker takes over the page (`controllerchange`; the worker already skips waiting and
      claims open tabs), which every release does, new data or not, since any change to the
-     app bumps `sw.js`; and when the retry below finds a newer catalogue. An open tab rarely
+     app bumps `sw.js`; and when the retry below finds a newer catalog. An open tab rarely
      looks for a new worker, so the page calls `registration.update()` (one small request
      for `sw.js`) on returning to the tab (`visibilitychange`) and once an hour while it
      stays visible: a tab left on a second screen never comes back to. Offline, the checks
      fail quietly and nothing shows. On phones the line shows even with the bottom sheet
      folded, as a thin bar at the top of its visible part.
   2. **Retry on a renamed pack, so the 404 never reaches anyone.** When a part download
-     returns 404, `static.js` fetches the manifest and catalogue again (`cache:
+     returns 404, `static.js` fetches the manifest and catalog again (`cache:
      "no-cache"`, a 304 when nothing changed), rebuilds its part index, prunes stored parts
-     the new catalogue no longer lists (as at load), and runs the query once more. The
+     the new catalog no longer lists (as at load), and runs the query once more. The
      user sees the right number, a moment late, and the notice. If it still fails, the
      message says so in plain words, never an HTTP status: "Tally's data has been updated.
      Reload to get the latest.", with the same Reload button. `StaleAppError`'s "App out of
@@ -286,12 +340,12 @@ Candidates still open:
   bumps the shell (v45).
 - **Checks:** a browser check that serves a build and loads the page, then without
   reloading: (a) bumps the shell only (a new feature, no new data) and expects the notice
-  after a visibility change; (b) swaps in a rebuilt country (new catalogue, new pack
+  after a visibility change; (b) swaps in a rebuilt country (new catalog, new pack
   names, old files deleted) and expects the right total with no error, then the notice;
   (c) presses Reload and expects the same shape and count back. Run it with the other
   browser checks.
 - **Effort:** S: about one session, plus the browser check.
-- **Privacy:** ✅. The checks fetch Tally's own `sw.js`, manifest and catalogue; they add
+- **Privacy:** ✅. The checks fetch Tally's own `sw.js`, manifest and catalog; they add
   requests to the host's counts, but no page view (the hosted site's analytics count page
   loads only). The kept shape stays in that tab's `sessionStorage`, on the device.
 
@@ -299,7 +353,7 @@ Candidates still open:
 
 - **F-04:** PNG export (Save image) shipped 2026-09-18; this item is the data formats,
   CSV and GeoJSON, beside it.
-- **F-06:** needs ADM1/ADM2 outlines from geoBoundaries (same licence) as a light vector
+- **F-06:** needs ADM1/ADM2 outlines from geoBoundaries (same license) as a light vector
   layer per country; clicking an area runs the normal shape query on its outline. Whole
   countries already work through the Country tab.
 - **F-07:** parked 2026-10-19: not wanted for now (maintainer's call). If revived, the
@@ -315,7 +369,7 @@ Candidates still open:
   India shape, a European border, a Greenland coast, and Detroit–Windsor, the first border
   between a Meta country and a WorldPop one.
 - **F-29:** record each pack's source file address (HDX or WorldPop) and the download's
-  sha256 in its header and the catalogue: a pack format minor bump.
+  sha256 in its header and the catalog: a pack format minor bump.
 - **F-32:** for the maintainer's own understanding, and to inform whether Tally should
   eventually move to WorldPop altogether now that Meta's maps are no longer updated
   (background: [DATA_SOURCES.md](DATA_SOURCES.md)). A script beside `verify_country.py`
@@ -330,7 +384,7 @@ Candidates still open:
   `docs/VERIFICATION.md`. Effort: S for the script, plus downloads and compute per country.
   GHS-POP could be added as an independent third view.
 - **F-33:** a continent entry at the head of each continent group in the Country tab.
-  The total is free: the sum of the catalogue's country totals (`continent` is already
+  The total is free: the sum of the catalog's country totals (`continent` is already
   there), exact and with no download. The map is not: it would download every pack of the
   continent today (Asia 94 MB, Africa 50 MB, North America 48 MB). It needs the overview
   tier from F-25 (coarse levels only, one file per continent): continents hold 960 to
@@ -349,7 +403,7 @@ Candidates still open:
   for offline use. Effort: M for the overview tier, then S for continents.
 - **F-34:** language and people-group areas are the hard real-world shapes (multipolygons,
   holes, coastlines, areas across borders, whole-country areas) and what upload (F-02)
-  users will bring. Use open, CC BY datasets only: Glottography's digitised Atlas of the
+  users will bring. Use open, CC BY datasets only: Glottography's digitized Atlas of the
   World's Languages (6,992 areas, github.com/glottography/asher2007world) and IMB's
   peoplegroups.org polygons (12,384 areas, a public ArcGIS service). (1) A handful of them,
   credited, as parity shapes (F-28) and F-02 test files. (2) A load test: every polygon
@@ -357,14 +411,14 @@ Candidates still open:
   the 40,000-cell limit. (3) Agreement between sources for the same language (joined by
   ISO 639-3 or Glottocode). A first trial counted 600 IMB areas in Cameroon, Kenya and
   Brazil in about 30 s. Licensed polygon sets (WLMS, Ethnologue) never go in the repo;
-  with F-02, licence holders count their own files on their own device.
+  with F-02, license holders count their own files on their own device.
 - **F-35:** Normal uses the finest level whose cover stays within 4,000 cells
   (`AUTO_TARGET_CELLS`); Fine is one level finer (~7x, so at most ~28,000); the 40,000
   cap (`MAX_CELLS_LIMIT`) is a safety bound that refuses rather than answer coarser, and
   also bounds one query's memory. So in the app the cap rarely binds (thin or ragged
   shapes, such as the language areas of F-34, might), and the real limit is the 4,000
   target: it sets both the map's detail and the edge error of the total (each hexagon
-  counts by its centre; Canada at resolution 7: -1.5%). Measure, on desktop and the
+  counts by its center; Canada at resolution 7: -1.5%). Measure, on desktop and the
   slowed phone of F-25, at 4k, 28k, 40k, 100k and 200k cells: polyfill time, lookup
   time, memory against `MEMORY_BUDGET`, and map drawing (downloads do not change: parts
   hold every level). Measure what it gains: how the total moves between levels for a
@@ -373,6 +427,19 @@ Candidates still open:
   a finer level than is drawn (a more accurate total without drawing more hexagons).
   Any change goes into `ingest/resolve.py` and `static.js` together, with
   `browser_parity.py`.
+- **F-36:** raised 2026-10-22 while building every WorldPop country (F-10). WorldPop's
+  files are cut at LSIB, so each holds only its own people and two WorldPop neighbors
+  never count the same person: their overlaps need no cut (the overlap split keeps them
+  in both clips; the overlap audit measures what both rasters fill). Meta's files cover
+  each country's bounding box, so every Meta border needs the clip and the overlap split,
+  and a border between Meta and WorldPop is where people get lost: China's coast by Hong
+  Kong and Macau, Dongxing on the Vietnam border, the band handed across a CGAZ line.
+  For: no overlap split at most borders, one source and year everywhere, and a source
+  still updated (Meta's maps are not). Against: 100 m instead of 30 m (Meta traces
+  buildings), every pack rebuilt and every country's total changes (a visible step for
+  people who noted one), disputed areas follow LSIB everywhere (as CGAZ does today), and
+  the checks and docs redone. Decide after F-32's comparison. Effort: M–L, mostly machine
+  time (downloads and a full rebuild).
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
@@ -410,3 +477,4 @@ Candidates still open:
 | F-27 | Continuous integration, level 1: lint and tests on every push and pull request | 2026-10-20 |
 | F-30 | Outline overlaps split along CGAZ: no one counted in two countries (1.67 M were) | 2026-10-20 |
 | F-31 | A tab left open survives a release: "new version" notice, retry on a renamed pack, the count kept across Reload | 2026-10-20 |
+| F-10 | WorldPop 100 m for the other 35 places Meta lacks (233 countries and territories); disputed borders through the overlap split | 2026-10-30 |

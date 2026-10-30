@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Woody McLendon
 # SPDX-License-Identifier: MIT
-"""Per-country offline packs: layout, split, catalogue entry, footprint. Synthetic cells only."""
+"""Per-country offline packs: layout, split, catalog entry, footprint. Synthetic cells only."""
 
 import gzip
 import hashlib
@@ -248,7 +248,7 @@ def test_data_version_looks_inside_undated_zips(tmp_path):
     assert data_version([z]) == "2018-10-01"
 
 
-def test_ensure_writes_the_catalogue_even_when_a_country_fails(tmp_path, monkeypatch):
+def test_ensure_writes_the_catalog_even_when_a_country_fails(tmp_path, monkeypatch):
     import build_packs
 
     def fake_levels(iso3, source):
@@ -279,7 +279,35 @@ def test_worldpop_countries_come_from_worldpop_and_are_credited():
     assert names[:2] == ["Meta Data for Good", "WorldPop"]
 
 
-def test_catalogue_backfills_what_the_country_picker_reads(tmp_path):
+def test_a_place_added_to_a_country_is_clipped_to_its_own_outline_or_the_countrys(monkeypatch):
+    import build_packs
+
+    from ingest import boundaries as gb
+    from ingest import overlaps as ov
+
+    monkeypatch.setattr(ov, "fetch_boundary", lambda iso3: Path(f"{iso3}.geojson"))
+    # Norfolk Island is all its own; Palestine's people inside Israel's outline go to Israel
+    # (ingest/overlaps.added_clip_path cuts that outline as Israel's clip is cut).
+    assert ov.added_clip_path("AUS", "NFK") == Path("NFK.geojson")
+    assert gb.CLIP_LEAVES_OUT["PSE"] == "ISR" and "PSE" in build_packs.ADDED_TO["ISR"]
+
+
+def test_a_place_added_to_a_country_is_credited_in_its_pack_and_catalog(tmp_path):
+    from build_packs import pack_source, source_for
+
+    # Norfolk Island's WorldPop people go into Australia's Meta pack, not a pack of its own.
+    assert pack_source("AUS") == "meta_hrsl, worldpop_100m"
+    assert pack_source("CMR") == "meta_hrsl" and pack_source("CAN") == "worldpop_100m"
+    assert source_for("NFK") == "meta_hrsl"  # never built as a country
+    files, entry = build_country("CMR", "meta_hrsl, worldpop_100m", pyramid(CMR), FEATURES, "2020")
+    assert read(files[0])[0]["source"] == "meta_hrsl, worldpop_100m"  # app.js sourceKeys
+    (tmp_path / entry["parts"][0]["url"]).write_bytes(files[0])
+    cat = write_catalog(tmp_path, {"CMR": entry})
+    assert set(cat["sources"]) == {"meta_hrsl", "worldpop_100m"}
+    assert [a["name"] for a in cat["attribution"]][:2] == ["Meta Data for Good", "WorldPop"]
+
+
+def test_catalog_backfills_what_the_country_picker_reads(tmp_path):
     files, entry = build()
     (tmp_path / entry["parts"][0]["url"]).write_bytes(files[0])
     counts = entry["cells_by_resolution"]

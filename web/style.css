@@ -143,8 +143,8 @@ button:disabled { opacity: .45; cursor: default; }
 #sketch-add { grid-column: 1 / -1; padding: 11px 14px; font-size: 15px; }
 #sketch-finish:disabled { background: var(--wash); color: var(--muted); }
 
-/* Where the next corner goes: four arms round an open centre, haloed white so it reads
-   on imagery, heatmap and grey alike. It turns into a filled ring over the first corner. */
+/* Where the next corner goes: four arms round an open center, haloed white so it reads
+   on imagery, heatmap and gray alike. It turns into a filled ring over the first corner. */
 .crosshair {
   position: fixed; z-index: 5; width: 46px; height: 46px; margin: -23px 0 0 -23px;
   pointer-events: none;

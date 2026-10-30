@@ -15,7 +15,7 @@ border is not:
 
   * loss -- this country's people in cells whose center falls outside the outline (just
     over the border, or offshore along the coast).
-  * gain -- a *neighbouring* country's people in cells whose center falls inside this
+  * gain -- a *neighboring* country's people in cells whose center falls inside this
     outline. The polygon total sums a cell across every pack, so they count.
 
   polygon_total == country_total - loss + gain
@@ -23,7 +23,7 @@ border is not:
 That identity is exact and is checked as such. The leftover net error is reported as the
 honest measure of how much the hex grid distorts a border at this resolution. It also
 checks that every pyramid level sums to the same total, that the total matches the
-catalogue, and each part's hashes, header, footprint and totals.
+catalog, and each part's hashes, header, footprint and totals.
 
 Outlines that cross the antimeridian (FJI, KIR, NZL) are refused: their lon/lat bounding
 box spans nearly the whole globe.
@@ -46,7 +46,7 @@ from shapely.geometry.base import BaseGeometry
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ingest.boundaries import boundary_path, fetch_boundary, outline_shape
-from ingest.config import MIN_RESOLUTION, SOURCES
+from ingest.config import MIN_RESOLUTION, SOURCES, source_keys
 
 console = Console()
 app = typer.Typer(add_completion=False)
@@ -68,9 +68,9 @@ class Facts:
     base_resolution: int
     inside: float  # this country's people in cells the polygon covers
     outside: float  # this country's people in cells it does not  (the loss term)
-    by_other: dict[str, float]  # neighbours' people inside our cells  (the gain term)
-    catalogue_total: float
-    # Packs store float32 populations and a rounded catalogue total.
+    by_other: dict[str, float]  # neighbors' people inside our cells  (the gain term)
+    catalog_total: float
+    # Packs store float32 populations and a rounded catalog total.
     tol_abs: float = 1.0
     tol_rel: float = 1e-6
     problems: list[str] = field(default_factory=list)
@@ -82,7 +82,7 @@ def query_packs(
     """(polygon total, facts) from the built packs.
 
     The polygon total sums every pack that holds a covered cell, as the browser does, so
-    neighbours' people inside the outline count (the gain term).
+    neighbors' people inside the outline count (the gain term).
     """
     ids = np.array(sorted(h3.str_to_int(c) for c in cells), dtype=np.uint64)
     entry = store.entries[iso3]
@@ -97,7 +97,7 @@ def query_packs(
         inside=inside,
         outside=tagged_res - inside,
         by_other=by_other,
-        catalogue_total=float(entry["total"]),
+        catalog_total=float(entry["total"]),
         problems=store.check(iso3),
     )
     return inside + sum(by_other.values()), facts
@@ -157,13 +157,13 @@ def report(
         f"{db.tagged_at_base:,.1f} vs {db.tagged_at_res:,.1f}",
         "[green]OK[/green]" if conserved else "[red]NOT CONSERVED[/red]",
     )
-    same = abs(db.catalogue_total - db.tagged_at_base) <= max(
+    same = abs(db.catalog_total - db.tagged_at_base) <= max(
         db.tol_abs, abs(db.tagged_at_base) * 1e-6
     )
     ok &= same
     t.add_row(
-        "catalogue total",
-        f"{db.catalogue_total:,.0f}",
+        "catalog total",
+        f"{db.catalog_total:,.0f}",
         "[green]OK[/green]" if same else "[red]disagrees with the cells[/red]",
     )
     if expect is not None:
@@ -205,7 +205,7 @@ def main(
     store = PackStore(packs) if packs else PackStore()
     if iso3 not in store.entries:
         raise typer.BadParameter(f"no pack for {iso3}; build it with scripts/build_packs.py")
-    source = source or store.entries[iso3]["source"]
+    source = source or source_keys(store.entries[iso3]["source"])[0]
     if source not in SOURCES:
         raise typer.BadParameter(f"unknown source {source!r}; have {list(SOURCES)}")
     base = SOURCES[source].base_resolution

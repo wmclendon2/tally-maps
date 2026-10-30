@@ -115,14 +115,14 @@ class PackStore:
                 continue
             packed = path.read_bytes()
             if hashlib.sha256(packed).hexdigest() != part["sha256"]:
-                problems.append(f"{part['url']}: sha256 differs from the catalogue")
+                problems.append(f"{part['url']}: sha256 differs from the catalog")
             try:
                 raw = gzip.decompress(packed)
             except (OSError, EOFError) as exc:
                 problems.append(f"{part['url']}: unreadable ({exc})")
                 continue
             if hashlib.sha256(raw).hexdigest() != part["raw_sha256"]:
-                problems.append(f"{part['url']}: raw_sha256 differs from the catalogue")
+                problems.append(f"{part['url']}: raw_sha256 differs from the catalog")
             header, start = unpack(raw)
             if (header["iso3"], header["part"], header["parts"]) != (iso3, i, len(e["parts"])):
                 problems.append(
@@ -149,7 +149,7 @@ class PackStore:
                 if footprints[a] & footprints[b]:
                     problems.append(f"parts {a} and {b} share footprint cells")
         if abs(part_totals - e["total"]) > max(1.0, e["total"] * 1e-6):
-            problems.append(f"parts sum to {part_totals:,.1f}, catalogue says {e['total']:,}")
+            problems.append(f"parts sum to {part_totals:,.1f}, catalog says {e['total']:,}")
         if MIN_RESOLUTION not in self.levels(iso3):
             problems.append(f"no res {MIN_RESOLUTION} level")
         return problems

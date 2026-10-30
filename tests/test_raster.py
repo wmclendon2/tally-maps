@@ -54,7 +54,7 @@ def test_pixel_center_maps_to_expected_cell(tmp_path):
     assert pops.tolist() == [7.0]
 
 
-def test_neighbouring_pixels_sum_into_one_coarse_cell(tmp_path):
+def test_neighboring_pixels_sum_into_one_coarse_cell(tmp_path):
     arr = np.ones((2, 2)) * 3.0
     _cells, pops, stats = raster_to_h3(_write(tmp_path, arr), 3)  # res 3 cells ~ 100 km
     assert stats.cells == 1

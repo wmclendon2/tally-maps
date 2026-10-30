@@ -14,7 +14,7 @@
 const DATA_URL = document.querySelector('meta[name="tally-data"]').content;
 // What the ?debug=1 status line reports as the backend.
 const BACKEND = "Data: downloaded packs";
-// The catalogue loads at once (a few KB); the packs come with the first polygon.
+// The catalog loads at once (a few KB); the packs come with the first polygon.
 const staticData = TallyStatic.load(DATA_URL);
 const fmtMB = (b) => (b > 0 && b < 5e4 ? "<0.1" : (b / 1e6).toFixed(b >= 1e7 ? 0 : 1));
 // index.html preconnects to this host, so keep the two in step.
@@ -496,7 +496,7 @@ if ("serviceWorker" in navigator) {
 }
 
 // ---- a new version (F-31) ---------------------------------------------------------
-// A tab keeps the scripts and the catalogue it loaded. Every release changes sw.js, and the
+// A tab keeps the scripts and the catalog it loaded. Every release changes sw.js, and the
 // new worker takes over open tabs (it skips waiting), so when the worker in charge is newer
 // than this page's scripts, or the data changed under the page (static.js), the panel says
 // so with a Reload button. Reload keeps the count. The page never reloads by itself: it
@@ -692,7 +692,7 @@ try {
 let radiusCenter = null; // [lng, lat] once a point is picked
 let pickingPoint = false;
 
-// The points `km` from the centre on a sphere (the radius app.js measures areas with),
+// The points `km` from the center on a sphere (the radius app.js measures areas with),
 // counter-clockwise as GeoJSON wants an outer ring.
 function circle([lng, lat], km) {
   const rad = Math.PI / 180;
@@ -719,7 +719,7 @@ function addRadiusLayers() {
     paint: { "fill-color": "#1f6feb", "fill-opacity": 0.08 } });
   map.addLayer({ id: "radius-line", type: "line", source: RADIUS_SOURCE, filter: area,
     paint: { "line-color": "#1f6feb", "line-width": 2 } });
-  map.addLayer({ id: "radius-centre", type: "circle", source: RADIUS_SOURCE,
+  map.addLayer({ id: "radius-center", type: "circle", source: RADIUS_SOURCE,
     filter: ["==", ["geometry-type"], "Point"],
     paint: { "circle-radius": 4, "circle-color": "#1f6feb",
              "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
@@ -870,7 +870,7 @@ function clearAll() {
 
 // ---- about sheet -------------------------------------------------------------
 // The ? sheet: what Tally is and where its numbers come from, then saved data, settings
-// and credits. It used to open on a world map of coverage, which the grey no-data layer on
+// and credits. It used to open on a world map of coverage, which the gray no-data layer on
 // the map itself made redundant (F-20).
 const SHELL = document.querySelector('script[src^="app.js?v="]')?.src.split("?v=")[1];
 
@@ -885,7 +885,7 @@ async function describeData() {
     scope.innerHTML =
       `It has data for <span class="fig">${fmtInt(n)}</span> ` +
       `${n === 1 ? "country or territory" : "countries and territories"}, ` +
-      `<span class="fig">${people}</span> ${EST} people in all. Grey land on the map has no data yet.`;
+      `<span class="fig">${people}</span> ${EST} people in all. Gray land on the map has no data yet.`;
     scope.hidden = false;
     $("about-version").textContent = `Version ${SHELL}, data built ${m.built}.`;
   } catch (err) {
@@ -1078,7 +1078,7 @@ document.addEventListener("keydown", (e) => {
 
 // ---- static demo -------------------------------------------------------------
 
-// Grey out the land the bundle has no data for, and frame the map on the rest: in a demo
+// Gray out the land the bundle has no data for, and frame the map on the rest: in a demo
 // the first question is "where can I draw", and a blank result elsewhere is not a bug.
 async function showStaticData() {
   let m = null;
@@ -1087,7 +1087,7 @@ async function showStaticData() {
   } catch (err) {
     setStatus(`Could not load the population data (${err.message}). Reload to retry.`, true);
   }
-  // Added even without data: the basemap's own credits are a licence condition too.
+  // Added even without data: the basemap's own credits are a license condition too.
   // One string, grouped by what each credit is for: given several, MapLibre reorders them,
   // which split the two population sources apart.
   const groups = new Map();
@@ -1109,7 +1109,7 @@ async function showStaticData() {
   if (!m) return;
   // A wash over the countries with no data; dashed borders round the covered ones stopped
   // helping once they ran round most of the world (191 countries, 2026-10-13).
-  // Under the heatmap and the place names, so neither is greyed.
+  // Under the heatmap and the place names, so neither is grayed.
   map.addSource("no-data", { type: "geojson", data: m.nodataUrl });
   const below = map.getLayer("population-fill")
     ? "population-fill"
@@ -1215,7 +1215,7 @@ for (const b of document.querySelectorAll(".seg[data-detail]")) {
 
 // Nothing is stored below the source's base resolution, so once the area is small enough
 // that Normal already reaches it, Fine has nowhere to go. Say so instead of leaving a
-// button that changes nothing when pressed. But never grey out the button that is
+// button that changes nothing when pressed. But never gray out the button that is
 // selected: after picking Fine, a disabled Fine read as if the click had not taken (F-15).
 function setFineAvailable(available) {
   const fineOn = detail === "fine";
@@ -1400,7 +1400,7 @@ function render(res) {
   }
   setStatus(
     res.populated_cells === 0
-      ? "No people here. Grey land on the map has no data."
+      ? "No people here. Gray land on the map has no data."
       : DEBUG
         ? BACKEND
         : "",

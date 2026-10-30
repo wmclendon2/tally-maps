@@ -6,8 +6,8 @@ Draw a shape on a map and see how many people live inside it, with a density hea
 
 - **Shape:** draw any polygon. **Radius:** everyone within a distance of a point.
   **Country:** a whole country at once.
-- 198 countries and territories, from 30 m population estimates (100 m for Canada,
-  Greenland and Jersey).
+- 233 countries and territories, from 30 m population estimates (100 m for the 38 that
+  Meta's maps leave out, among them China, Russia, Pakistan, Canada and Iran).
 - Runs entirely in your browser. Country data downloads on first use and stays available
   offline. Nothing you draw leaves your device.
 - Works on phones and installs as an app (PWA).
@@ -26,7 +26,7 @@ question, the browser covers your shape with hexagons at a resolution that suits
 downloads only the parts of the packs it needs, and adds up the hexagons. A city block and
 a continent both come back in a few thousand hexagons.
 
-Hexagons are counted when their **centre** is inside the shape, so shapes placed next to
+Hexagons are counted when their **center** is inside the shape, so shapes placed next to
 each other never count anyone twice and never leave a gap.
 
 The details and the design decisions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -58,8 +58,8 @@ make demo     # builds Cameroon and the Central African Republic, then serves th
 Open **http://127.0.0.1:8081** in your browser. Press Ctrl-C in the terminal to stop.
 
 `make demo` downloads about 220 MB the first time (two population rasters of 24 and 32 MB,
-their country outlines and their neighbours', geoBoundaries' 162 MB world map that splits
-outlines where neighbours overlap, and Natural Earth's world map for the grey "no data"
+their country outlines and their neighbors', geoBoundaries' 162 MB world map that splits
+outlines where neighbors overlap, and Natural Earth's world map for the gray "no data"
 areas) and
 takes a minute or two. Later runs reuse everything already downloaded or built.
 
@@ -72,10 +72,10 @@ make demo COUNTRIES="KEN TZA UGA"
 ```
 
 The app shows exactly the countries in that build. `docs/img/coverage.json` lists every
-country with data (`available`). `make catalog` lists Meta's catalogue with each
-country's download size. A few countries have no Meta data at all
-(Russia, China, Pakistan and others; see the map above) and cannot be built yet; Canada
-and Greenland are built from WorldPop instead.
+country with data (`available`). `make catalog` lists Meta's catalog with each
+country's download size. 38 places have no usable Meta data (China, Russia, Pakistan,
+Canada, Iran and others; `ingest/config.py` lists them); they are built from WorldPop
+instead.
 
 Each country is built in parallel with the others; large ones take a few minutes (Brazil
 about 2.5) and need up to ~4 GB of memory each. Most downloads are under 200 MB; the
@@ -134,17 +134,20 @@ None of these are tracked by git.
 - Point at (or tap) a hexagon for its own estimate. The hexagon **?** button opens About
   Tally: the data and its limits, units, and the countries saved for offline use.
 
-The figures are **modelled estimates, not census counts**, and are least reliable near
-coasts, borders and in places that have changed recently.
+These population estimates are **based on models and projections, not census counts**.
+They are useful for approximating a population in an area. The estimates are less reliable
+near coasts, borders, and where populations have grown rapidly. Do not use these estimates
+for safety or legal decisions. Tally makes no determination or claims concerning disputed
+borders or territories.
 
 ## Data
 
-| Source | Used for | Licence |
+| Source | Used for | License |
 | --- | --- | --- |
 | [Meta High Resolution Population Density Maps][hrsl] via [HDX][hdx] | Population, 30 m | CC BY 4.0 |
-| [WorldPop](https://www.worldpop.org) | Population, 100 m, where Meta has no data (Canada, Greenland, Jersey) | CC BY 4.0 |
-| [geoBoundaries][gb] | Country outlines for clipping; its CGAZ set splits outlines that overlap | CC BY 4.0; each outline's source keeps its own open licence (often OpenStreetMap's ODbL), listed in geoBoundaries' metadata |
-| [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, six territories' outlines | Public domain |
+| [WorldPop](https://www.worldpop.org) | Population, 100 m, where Meta has no data (38 places, among them China, Russia, Pakistan, Canada and Iran) | CC BY 4.0 |
+| [geoBoundaries][gb] | Country outlines for clipping; its CGAZ set splits outlines that overlap | CC BY 4.0; each outline's source keeps its own open license (often OpenStreetMap's ODbL), listed in geoBoundaries' metadata |
+| [Natural Earth](https://www.naturalearthdata.com) | City points, continents, the no-data mask, eleven territories' outlines | Public domain |
 | [OpenFreeMap](https://openfreemap.org) / OpenStreetMap | Basemap | ODbL |
 
 All are downloaded from their publishers when you build; none needs an account or key.
@@ -161,7 +164,7 @@ make update-check               # a tab left open survives a release (new versio
 make overlaps                   # people counted in two countries where outlines overlap
 ```
 
-Neighbouring countries' outlines overlap where their sources disagree about the border.
+Neighboring countries' outlines overlap where their sources disagree about the border.
 `reference/overlap_split.json` gives each overlap to one side, so no one is counted twice.
 The split follows geoBoundaries' CGAZ world map (downloaded once into `data/cgaz/`).
 After adding a country Tally has never had, with every country built, run
@@ -184,10 +187,10 @@ How the checks work, and the results so far: [docs/VERIFICATION.md](docs/VERIFIC
 
 Planned and shipped features: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Licence
+## License
 
-The code is released under the [MIT License](LICENSE). The licence covers the code only.
-The population data, boundaries and basemap keep their own licences (mostly CC BY 4.0,
+The code is released under the [MIT License](LICENSE). The license covers the code only.
+The population data, boundaries and basemap keep their own licenses (mostly CC BY 4.0,
 which requires attribution). See [NOTICE.md](NOTICE.md) for credit lines and the
 no-warranty note on the estimates.
 

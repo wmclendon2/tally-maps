@@ -27,7 +27,7 @@ def facts(**over) -> vc.Facts:
         "inside": 950.0,
         "outside": 50.0,
         "by_other": {"NBR": 30.0},
-        "catalogue_total": 1000.0,
+        "catalog_total": 1000.0,
     }
     return vc.Facts(**{**base, **over})
 

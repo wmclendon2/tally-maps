@@ -14,6 +14,20 @@ from pathlib import Path
 
 REFERENCE = Path(__file__).resolve().parent.parent / "reference" / "continents.json"
 
+# Natural Earth's ADM0_A3 codes that Tally builds under another code. Christmas Island and
+# Cocos (Natural Earth's IOA), Norfolk Island, Somaliland and Northern Cyprus are in
+# Australia's, Somalia's and Cyprus's outlines and packs.
+NATURAL_EARTH_CODE = {
+    "SDS": "SSD",
+    "PSX": "PSE",
+    "SAH": "ESH",
+    "ALD": "ALA",
+    "IOA": "AUS",
+    "NFK": "AUS",
+    "SOL": "SOM",
+    "CYN": "CYP",
+}
+
 
 def slug(continent: str) -> str:
     """'North America' -> 'north-america'. What the CLI accepts."""

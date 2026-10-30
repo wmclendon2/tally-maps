@@ -3,8 +3,8 @@
 """Make web/og-image.jpg, the picture Slack, WhatsApp, iMessage and others show for a link.
 
 A 1200 x 630 card: Tally's name and question on the left, a country's real heatmap from the
-app on the right with its total. Run it on a build of every country, so the neighbours are
-not greyed as "no data":
+app on the right with its total. Run it on a build of every country, so the neighbors are
+not grayed as "no data":
 
     uv run python scripts/build_static.py --country ... --out /tmp/tally-all
     uv run --group browser python scripts/og_image.py --dist /tmp/tally-all

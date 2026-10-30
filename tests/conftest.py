@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 @pytest.fixture(autouse=True)
 def no_outline_downloads(monkeypatch):
-    """Catalogue writes look up each country's area from its outline, which can mean a
+    """Catalog writes look up each country's area from its outline, which can mean a
     download; tests build made-up countries, so they get a fixed area instead."""
     import build_packs
 

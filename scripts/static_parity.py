@@ -46,7 +46,7 @@ CASES = {
     "brasilia-tiny": ((-47.88, -15.795, -47.879, -15.794), 0),
     # Added 2026-10-13, for the countries packed beyond CMR/CAF/BRA.
     "lagos": ((3.2, 6.35, 3.6, 6.7), 0),  # NGA is two parts
-    "nigeria": ((2.6, 4.2, 14.7, 13.9), 0),  # needs both NGA parts and its neighbours
+    "nigeria": ((2.6, 4.2, 14.7, 13.9), 0),  # needs both NGA parts and its neighbors
     "addis-ababa-fine": ((38.65, 8.9, 38.9, 9.1), 1),  # ETH is two parts
     "mauritius": ((57.3, -20.55, 57.82, -19.95), 0),  # an island: most cells are sea
     "mahe-fine": ((55.35, -4.8, 55.55, -4.55), 1),  # SYC, the smallest pack

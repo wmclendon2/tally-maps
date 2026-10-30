@@ -7,7 +7,7 @@ import pytest
 from ingest import continents
 
 
-def test_slug_normalises_what_a_user_might_type():
+def test_slug_normalizes_what_a_user_might_type():
     assert continents.slug("North America") == "north-america"
     assert continents.slug(" AFRICA ") == "africa"
     assert continents.slug("South_America") == "south-america"

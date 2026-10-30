@@ -7,12 +7,12 @@
 Writes `data/packs/` (git-ignored, a cache): gzipped packs plus `catalog.json`, which lists
 every pack with its size, hashes and footprint. The browser (web/static.js) downloads the
 packs a polygon needs, keeps them in IndexedDB and sums cells with h3-js. build_static.py
-copies the demo's countries from this cache into dist/packs/ with a catalogue of their own.
+copies the demo's countries from this cache into dist/packs/ with a catalog of their own.
 
 It needs no database: cells are computed from the rasters under
 data/raw (downloaded from HDX if missing). Countries are independent, so a run only
-rebuilds the countries it is given and keeps the other entries already in the catalogue;
-`--fresh` starts an empty one. Pack files no catalogue entry points at are deleted.
+rebuilds the countries it is given and keeps the other entries already in the catalog;
+`--fresh` starts an empty one. Pack files no catalog entry points at are deleted.
 
 Large countries are split into parts. A part is every cell, at every resolution, whose
 res-3 ancestor falls in one run of res-3 cells taken in H3 index order (which keeps them
@@ -34,10 +34,10 @@ Pack layout (all integers little-endian):
 
 The padding is what keeps every section 4-byte aligned in the file, which the browser's
 Uint32Array/Float32Array views require. A pack carries its own header because a stored
-pack outlives the catalogue that listed it: the client must be able to read (or refuse)
-it without trusting that today's catalogue still describes it.
+pack outlives the catalog that listed it: the client must be able to read (or refuse)
+it without trusting that today's catalog still describes it.
 
-Each part's `footprint` in the catalogue is its res-3 cells. A query cell can only draw
+Each part's `footprint` in the catalog is its res-3 cells. A query cell can only draw
 population from a part whose footprint holds the cell's res-3 parent, so the client can
 name exactly the parts a polygon needs with no country outlines at all.
 """
@@ -63,7 +63,7 @@ from rich.console import Console
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ingest.config import DATA_DIR, MIN_RESOLUTION, SOURCES
+from ingest.config import DATA_DIR, MIN_RESOLUTION, SOURCES, WORLDPOP_COUNTRIES, source_keys
 from ingest.continents import continent_name, name_of
 
 MAGIC = b"TLYP"
@@ -71,13 +71,16 @@ FORMAT = (1, 0)
 FIXED = struct.Struct("<4sHHI")  # magic, major, minor, header length
 ALIGN = 8
 SOURCE = "meta_hrsl"
-# Countries whose Meta raster is unusable or missing, built from another source instead.
-# Meta's "Jersey" file (jey_general_2020) has no data over Jersey at all: its 418 k people
-# are Guernsey's and Normandy's, and every pixel on the island is nodata (checked
-# 2026-10-13). Meta has no file at all for Canada or Greenland, whose borders are
-# undisputed, so no neighbour's pack can hold their people. Canada's clip is grown and
-# split with its neighbours (ingest/boundaries.CLIP_GROW_DEG).
-SOURCE_FOR = {"JEY": "worldpop_100m", "CAN": "worldpop_100m", "GRL": "worldpop_100m"}
+# Countries whose Meta raster is unusable or missing, built from WorldPop instead
+# (ingest.config.WORLDPOP_COUNTRIES says why).
+SOURCE_FOR = {iso3: "worldpop_100m" for iso3 in WORLDPOP_COUNTRIES}
+# Places built into another country's pack from their own source, clipped to their own
+# outline: Meta's Australia file has no one on Norfolk Island, so WorldPop's ~2,200 there
+# are added to Australia's pack (the owner's choice, 2026-10-22). A place whose clip leaves
+# the country's outline out (boundaries.CLIP_LEAVES_OUT) is clipped to that outline less
+# what the country gives its neighbors (overlaps.added_clip_path) instead: Palestine's
+# people in East Jerusalem go to Israel's pack (2026-10-23).
+ADDED_TO = {"AUS": {"NFK": "worldpop_100m"}, "ISR": {"PSE": "worldpop_100m"}}
 PACK_CACHE = DATA_DIR / "packs"
 DEFAULT_COUNTRIES = ["CMR", "CAF"]
 MAX_PART_MB = 16.0  # raw; ~3 MB once gzipped (whole people compress well)
@@ -88,7 +91,8 @@ VINTAGE_RE = re.compile(r"(?<![\dA-Za-z])(20\d\d(?:-\d\d-\d\d)?)(?![\dA-Za-z])")
 
 # Credited in the map's attribution line, linked like the basemap's own credits: the
 # population sources a build uses, then the outlines (Natural Earth's clip a few
-# territories and draw the grey no-data mask).
+# territories and draw the gray no-data mask). "licence" keeps its British spelling: it
+# is a catalog field installed copies of app.js read.
 SOURCE_CREDITS = {
     "meta_hrsl": {
         "what": "Population",
@@ -125,6 +129,12 @@ def attribution(sources: set[str]) -> list[dict]:
 
 def source_for(iso3: str) -> str:
     return SOURCE_FOR.get(iso3.upper(), SOURCE)
+
+
+def pack_source(iso3: str) -> str:
+    """The source recorded in a country's pack: its own, then any added place's."""
+    added = ADDED_TO.get(iso3.upper(), {}).values()
+    return ", ".join(dict.fromkeys([source_for(iso3), *added]))
 
 
 console = Console()
@@ -321,9 +331,9 @@ def build_country(
     vintage: str,
     max_part_mb: float = MAX_PART_MB,
 ) -> tuple[list[bytes], dict]:
-    """The gzipped parts and the country's catalogue entry, each part checked by decoding it."""
+    """The gzipped parts and the country's catalog entry, each part checked by decoding it."""
     levels = tidy(whole_people(tidy(levels)))
-    base = SOURCES[source].base_resolution
+    base = SOURCES[source_keys(source)[0]].base_resolution
     country_total = float(levels[base][1].sum())
     built = datetime.now(UTC).date().isoformat()
     pieces = split(levels, max_part_mb * 1e6)
@@ -388,13 +398,13 @@ def country_area(iso3: str) -> float:
 
 def clip_outline(iso3: str) -> Path:
     """The outline a country's raster is clipped to: its own, minus the overlaps it gives
-    to a neighbour (ingest/overlaps.py, F-30)."""
+    to a neighbor (ingest/overlaps.py, F-30)."""
     from ingest.overlaps import SPLIT_PATH, clip_path, load_split
 
     split = load_split()
     if iso3 not in split["countries"]:
         console.print(
-            f"[yellow]{iso3} is not in {SPLIT_PATH.name}: its overlaps with neighbours are not "
+            f"[yellow]{iso3} is not in {SPLIT_PATH.name}: its overlaps with neighbors are not "
             "split, so their packs may both count people there. Run "
             f"scripts/split_overlaps.py --country {iso3} first.[/yellow]"
         )
@@ -467,9 +477,9 @@ def bbox(features: list[dict]) -> list[float]:
 
 
 def country_outline(iso3: str) -> list[dict]:
-    from ingest.boundaries import fetch_boundary
+    from ingest.boundaries import outline_path
 
-    return outline(json.loads(fetch_boundary(iso3).read_text()), iso3)
+    return outline(json.loads(outline_path(iso3).read_text()), iso3)
 
 
 def raster_paths(iso3: str, source: str) -> list[Path]:
@@ -510,23 +520,29 @@ def data_version(paths: list[Path]) -> str:
 
 
 def country_levels(iso3: str, source: str) -> tuple[dict, list[dict], str]:
-    """{resolution: (cells, pops)} for one country, its outline features and data vintage."""
+    """{resolution: (cells, pops)} for one country (with any places ADDED_TO it), its
+    outline features and data vintage (its own source's)."""
+    from ingest.overlaps import added_clip_path
     from ingest.pipeline import run_country
 
-    src = SOURCES[source]
-    paths = raster_paths(iso3, source)
-    boundary = clip_outline(iso3)
-    r = run_country(iso3, source, paths, src.base_resolution, boundary=boundary, console=console)
-    levels = dict(r.levels)
-    levels[src.base_resolution] = (r.cells, r.pops)
-    return levels, country_outline(iso3), data_version(paths)
+    def levels_of(code: str, source: str, boundary: Path) -> dict:
+        base = SOURCES[source].base_resolution
+        paths = raster_paths(code, source)
+        r = run_country(code, source, paths, base, boundary=boundary, console=console)
+        return {**r.levels, base: (r.cells, r.pops)}
+
+    levels = levels_of(iso3, source, clip_outline(iso3))
+    added = [levels_of(c, s, added_clip_path(iso3, c)) for c, s in ADDED_TO.get(iso3, {}).items()]
+    if added:
+        levels = merge([levels, *added])
+    return levels, country_outline(iso3), data_version(raster_paths(iso3, source))
 
 
-# ---- catalogue ------------------------------------------------------------------------
+# ---- catalog ------------------------------------------------------------------------
 
 
 def load_entries(out: Path) -> dict[str, dict]:
-    """Catalogue entries whose files are all still there, by ISO3."""
+    """Catalog entries whose files are all still there, by ISO3."""
     path = out / "catalog.json"
     if not path.exists():
         return {}
@@ -541,7 +557,7 @@ def load_entries(out: Path) -> dict[str, dict]:
 
 
 def write_catalog(out: Path, entries: dict[str, dict]) -> dict:
-    sources = sorted({e["source"] for e in entries.values()})
+    sources = sorted({k for e in entries.values() for k in source_keys(e["source"])})
     for e in entries.values():
         enrich(e, out)
     catalog = {
@@ -563,7 +579,7 @@ def write_catalog(out: Path, entries: dict[str, dict]) -> dict:
 
 
 def prune(out: Path, entries: dict[str, dict]) -> list[str]:
-    """Delete pack files that no catalogue entry points at."""
+    """Delete pack files that no catalog entry points at."""
     keep = {p["url"] for e in entries.values() for p in e["parts"]}
     gone = []
     for f in out.glob("*.tlyp.gz"):
@@ -574,17 +590,16 @@ def prune(out: Path, entries: dict[str, dict]) -> list[str]:
 
 
 def build_one(iso3: str, out: Path, max_part_mb: float, quiet: bool) -> tuple[dict, float]:
-    """Compute one country, write its part files into `out` and return its catalogue entry.
+    """Compute one country, write its part files into `out` and return its catalog entry.
 
     Runs in a worker process. Part files are named by content hash, so workers never
-    write the same file; the catalogue itself is left to the parent.
+    write the same file; the catalog itself is left to the parent.
     """
     if quiet:
         console.quiet = True
     t = time.perf_counter()
-    source = source_for(iso3)
-    levels, features, vintage = country_levels(iso3, source)
-    files, entry = build_country(iso3, source, levels, features, vintage, max_part_mb)
+    levels, features, vintage = country_levels(iso3, source_for(iso3))
+    files, entry = build_country(iso3, pack_source(iso3), levels, features, vintage, max_part_mb)
     entry["area_km2"] = country_area(iso3)
     for part, packed in zip(entry["parts"], files, strict=True):
         (out / part["url"]).write_bytes(packed)
@@ -600,6 +615,8 @@ def job_cost(iso3: str) -> float:
     paths = SOURCES[source].default_paths(iso3)
     if source == SOURCE:
         paths = paths or sorted(hdx.country_dir(iso3).glob("*.zip"))
+    for code, added in ADDED_TO.get(iso3, {}).items():
+        paths = [*paths, *SOURCES[added].default_paths(code)]
     return float(raw_bytes(paths))
 
 
@@ -613,10 +630,10 @@ def ensure(
     workers: int = 1,
 ) -> dict[str, dict]:
     """Build the countries' packs into `out` (reusing cached ones unless `rebuild`) and
-    rewrite its catalogue. Returns every entry in the catalogue, by ISO3.
+    rewrite its catalog. Returns every entry in the catalog, by ISO3.
 
     With several `workers`, countries are built in parallel (ingest.parallel). The
-    catalogue is rewritten after each country, so an interrupted run keeps what it
+    catalog is rewritten after each country, so an interrupted run keeps what it
     finished; stale part files are pruned only at the end.
     """
     from ingest import parallel
@@ -668,9 +685,7 @@ def main(
     ] = None,
     out: Annotated[Path, typer.Option(help="Pack cache directory")] = PACK_CACHE,
     rebuild: Annotated[bool, typer.Option(help="Recompute countries already cached")] = True,
-    fresh: Annotated[
-        bool, typer.Option(help="Drop catalogue entries not built in this run")
-    ] = False,
+    fresh: Annotated[bool, typer.Option(help="Drop catalog entries not built in this run")] = False,
     max_part_mb: Annotated[
         float, typer.Option(help="Split packs above this raw size")
     ] = MAX_PART_MB,

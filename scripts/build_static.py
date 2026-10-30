@@ -12,11 +12,11 @@ it needs no server code and no database (any static file server will do, such as
 The packs come from build_packs.py's cache in data/packs/: countries already there are
 reused (Brazil takes ~2.5 min to compute), missing ones are built from the rasters, and
 `--rebuild-packs` recomputes them. Only the chosen countries are copied into dist/packs/,
-with a catalogue of their own, so the app never offers data it does not claim to have.
+with a catalog of their own, so the app never offers data it does not claim to have.
 Pack format: see build_packs.py.
 
 `dist/data/manifest.json` describes the build: its countries, their combined bbox, the
-grey "no data" mask (`nodata.geojson`), credits, and where the pack catalogue is.
+gray "no data" mask (`nodata.geojson`), credits, and where the pack catalog is.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ from build_packs import (
     write_catalog,
 )
 
-from ingest.config import ROOT
+from ingest.config import ROOT, source_keys
 
 DEFAULT_COUNTRIES = ["CMR", "CAF", "BRA"]
 WEB = ROOT / "web"
@@ -56,14 +56,14 @@ console = Console()
 # around the covered countries, which at 191 countries were 8.8 MB fetched by every visitor
 # (and drew a red line round most of the world); the mask is ~160 KB gzipped.
 MASK_TOLERANCE_DEG = 0.01
-# Where a grey country meets a covered one, Natural Earth's and geoBoundaries' borders
-# disagree by a few hundred metres; opening by this much drops the slivers that leaves.
+# Where a gray country meets a covered one, Natural Earth's and geoBoundaries' borders
+# disagree by a few hundred meters; opening by this much drops the slivers that leaves.
 MASK_SLIVER_DEG = 0.02
-# A covered outline can also take in a real piece of a grey country: India's claims most of
+# A covered outline can also take in a real piece of a gray country: India's claims most of
 # Pakistan-administered Kashmir, Finland's holds Aland, the USA's the Virgin Islands. The
 # outline alone would clear those, but the rasters behind them hold almost nobody there
 # (Kashmir 76k people over 79,000 km2, Aland 0). So an overlap bigger than this share of the
-# grey country stays grey unless the pack has at least MIN_DENSITY people per km2 in it.
+# gray country stays gray unless the pack has at least MIN_DENSITY people per km2 in it.
 CLAIM_SHARE = 0.05
 MIN_DENSITY = 5.0
 
@@ -71,7 +71,7 @@ MIN_DENSITY = 5.0
 def no_data(countries: list[str], packs: Path = PACK_CACHE) -> dict:
     """Land with no data in this build, as one GeoJSON feature: every Natural Earth country
     not built, minus where the built ones' clipping outlines and data reach into it, so the
-    grey stops where the data does."""
+    gray stops where the data does."""
     import h3
     import numpy as np
     from coverage_map import NE_CACHE, fetch_world
@@ -80,20 +80,23 @@ def no_data(countries: list[str], packs: Path = PACK_CACHE) -> dict:
     from shapely.geometry import mapping, shape
     from shapely.ops import unary_union
 
+    from ingest.continents import NATURAL_EARTH_CODE
+
     fetch_world()  # downloads and caches the file if needed
     built = set(countries)
 
     def codes(p: dict) -> set[str]:
-        return {(p.get(k) or "").upper() for k in ("ADM0_A3", "ISO_A3", "ISO_A3_EH")}
+        own = {(p.get(k) or "").upper() for k in ("ADM0_A3", "ISO_A3", "ISO_A3_EH")}
+        return own | {NATURAL_EARTH_CODE[c] for c in own if c in NATURAL_EARTH_CODE}
 
     features = json.loads(NE_CACHE.read_text())["features"]
-    greys = [shape(f["geometry"]).buffer(0) for f in features if not codes(f["properties"]) & built]
-    # Only covered countries that touch the grey matter; unioning all of them takes minutes.
+    grays = [shape(f["geometry"]).buffer(0) for f in features if not codes(f["properties"]) & built]
+    # Only covered countries that touch the gray matter; unioning all of them takes minutes.
     pieces = [(iso3, shape(f["geometry"])) for iso3 in countries for f in country_outline(iso3)]
     tree = STRtree([g for _, g in pieces])
     near: dict[str, list] = {}
-    for grey in greys:
-        for i in tree.query(grey.buffer(0.1)):
+    for gray in grays:
+        for i in tree.query(gray.buffer(0.1)):
             iso3, g = pieces[int(i)]
             near.setdefault(iso3, []).append(g)
     outlines = {
@@ -112,14 +115,14 @@ def no_data(countries: list[str], packs: Path = PACK_CACHE) -> dict:
         return bool(km2) and people / km2 >= MIN_DENSITY
 
     kept = []
-    for grey in greys:
+    for gray in grays:
         for iso3, outline in outlines.items():
-            if not grey.intersects(outline):
+            if not gray.intersects(outline):
                 continue
-            overlap = grey.intersection(outline)
-            if overlap.area <= CLAIM_SHARE * grey.area or has_people(iso3, overlap):
-                grey = grey.difference(outline)
-        kept.append(grey)
+            overlap = gray.intersection(outline)
+            if overlap.area <= CLAIM_SHARE * gray.area or has_people(iso3, overlap):
+                gray = gray.difference(outline)
+        kept.append(gray)
     mask = unary_union(kept).buffer(-MASK_SLIVER_DEG).buffer(MASK_SLIVER_DEG)
     g = mapping(mask.simplify(MASK_TOLERANCE_DEG, preserve_topology=True))
 
@@ -135,19 +138,26 @@ def no_data(countries: list[str], packs: Path = PACK_CACHE) -> dict:
 
 # The mask takes ~70 s for 196 countries, nearly the whole build, and only changes when
 # its inputs do. Cached under data/ by a key over everything it reads: the code of
-# no_data() and its settings, the countries and their pack files (content-hashed names, so
-# a rebuilt pack is a new key) and the Natural Earth file.
+# no_data() and its settings, the Natural Earth codes it maps to Tally's, the countries,
+# their outline files (by size and time) and pack files (content-hashed names, so a
+# rebuilt pack is a new key) and the Natural Earth file.
 NODATA_CACHE = ROOT / "data" / "nodata"
 
 
 def nodata_key(entries: dict) -> str:
     from coverage_map import NE_CACHE, fetch_world
 
+    from ingest.boundaries import outline_path
+    from ingest.continents import NATURAL_EARTH_CODE
+
     fetch_world()
     h = hashlib.sha256(inspect.getsource(no_data).encode())
     h.update(repr((MASK_TOLERANCE_DEG, MASK_SLIVER_DEG, CLAIM_SHARE, MIN_DENSITY)).encode())
+    h.update(repr(sorted(NATURAL_EARTH_CODE.items())).encode())
     for iso3 in sorted(entries):
         h.update(f"{iso3}:{','.join(sorted(p['url'] for p in entries[iso3]['parts']))};".encode())
+        st = outline_path(iso3).stat()
+        h.update(f"{st.st_size}:{st.st_mtime_ns};".encode())
     h.update(hashlib.sha256(NE_CACHE.read_bytes()).digest())
     return h.hexdigest()[:20]
 
@@ -191,7 +201,7 @@ def main(
         "bbox": [min(xs), min(ys), max(xs), max(ys)],
         "catalog": "../packs/catalog.json",
         "nodata": "nodata.geojson",
-        "attribution": attribution({e["source"] for e in entries.values()}),
+        "attribution": attribution({k for e in entries.values() for k in source_keys(e["source"])}),
     }
 
     if out.exists():

@@ -14,8 +14,8 @@ here has been measured by Tally yet; the measured comparison is F-32 in
   Tally's 195 Meta packs are dated 2018 (40 countries), 2019 (19), 2020 (135) and 2025
   (India).
 - **WorldPop is maintained.** Its Global2 release (R2025A, September 2025) has annual maps
-  for 2015 to 2030 for 242 countries and territories, under the same licence (CC BY 4.0).
-  It is labelled an *alpha* release that "may change over the coming year".
+  for 2015 to 2030 for 242 countries and territories, under the same license (CC BY 4.0).
+  It is labeled an *alpha* release that "may change over the coming year".
 - **They ask the same question differently.** Meta finds buildings in 0.5 m satellite
   imagery and spreads census counts over the settled 30 m pixels. WorldPop predicts a
   density surface at 100 m from a library of covariates (buildings, night lights, roads,
@@ -34,17 +34,17 @@ here has been measured by Tally yet; the measured comparison is F-32 in
 | --- | --- | --- |
 | Made by | Meta's Data for Good with CIESIN (Columbia University) | WorldPop, University of Southampton |
 | Method | Machine-learning building detection on satellite imagery, then census counts allocated to the settled pixels | Random-forest density model (`popRF`) used as weights to split census counts ("top-down dasymetric"), only in built cells ("constrained") |
-| Where buildings come from | Meta's own detection on commercial Maxar (DigitalGlobe) imagery; the citation says © 2016 imagery | GHSL built surface and volume (EU), Google Open Buildings v3, Microsoft footprints, World Settlement Footprint; modelled year by year |
+| Where buildings come from | Meta's own detection on commercial Maxar (DigitalGlobe) imagery; the citation says © 2016 imagery | GHSL built surface and volume (EU), Google Open Buildings v3, Microsoft footprints, World Settlement Footprint; modeled year by year |
 | Resolution | 1 arc-second, about 30 m | 3 arc-seconds, about 100 m |
 | Years | One snapshot per country: 2018, 2019 or 2020 (India 2025) | Every year 2015–2030 (Tally uses 2020) |
-| Countries | 196 files in Tally's list (Jersey's has no data over the island); Meta says "160+" | 242; 9 uninhabited territories and the Vatican not modelled |
+| Countries | 196 files in Tally's list (Jersey's has no data over the island); Meta says "160+" | 242; 9 uninhabited territories and the Vatican not modeled |
 | Census input | Census and other official statistics, one per country | Two census rounds per country (around 2010 and 2020) at the finest admin level available; US Census Bureau projections or UN CODs where the census is old or there is conflict |
 | National totals | Scaled to the UN estimate for the map's year by one national factor | Aligned to the UN World Population Prospects 2024, as of 1 January |
 | Age and sex | 6 layers besides the total: women, men, under-5s, youth 15–24, 60+, women 15–49 | Every 5-year age group by sex (0–1, 1–4, 5–9 … 90+), every year |
-| File extent | The country's bounding box, neighbours included (CMR's holds 79.6 M people outside Cameroon) | The country only, split by the US State Department's LSIB boundaries |
-| Licence | CC BY 4.0 | CC BY 4.0 |
+| File extent | The country's bounding box, neighbors included (CMR's holds 79.6 M people outside Cameroon) | The country only, split by the US State Department's LSIB boundaries |
+| License | CC BY 4.0 | CC BY 4.0 |
 | Status | No longer updated (2024) | Alpha; documented changes promised as they come |
-| In Tally | 195 countries | Canada, Greenland, Jersey |
+| In Tally | 195 countries | 38 places (`ingest/config.WORLDPOP_COUNTRIES`): China, Russia, Pakistan, Canada, Iran and others |
 
 ## Where they should differ
 
@@ -57,7 +57,7 @@ These are expectations from the methods, to be checked by F-32.
   that all five global datasets it tested undercount rural populations, WorldPop the least
   (−53%) and GHS-POP the most (−84%). Meta's maps were not in that study.
 - **Inside cities.** Meta's allocation is close to proportional to settled area within each
-  admin unit, so a dense centre and a suburb of the same unit get similar densities.
+  admin unit, so a dense center and a suburb of the same unit get similar densities.
   WorldPop's model weighs building volume, night lights and roads, so it should show more
   variation inside cities. WorldPop warns, though, that where only coarse admin units have
   two census rounds, its maps can "look less spatially detailed" and miss "high urban
@@ -83,8 +83,8 @@ These are expectations from the methods, to be checked by F-32.
 - It is maintained, and the year is a choice: Tally could show 2025 or 2026 rather than a
   mix of 2018–2020 snapshots, and move forward with each release.
 - One method everywhere: no Meta–WorldPop seam at borders (Detroit–Windsor today).
-- It covers the countries Meta lacks (China, Pakistan, Russia, Iran, Myanmar…), so F-10
-  would no longer be a separate job.
+- It covers the countries Meta lacks (China, Pakistan, Russia, Iran, Myanmar…), which Tally
+  already takes from it (F-10), so they would no longer be a separate source.
 - Files are already cut to the country, so there is no bounding-box surplus to clip away,
   and the downloads are smaller.
 
@@ -105,18 +105,18 @@ would name WorldPop and the year.
 
 **Questions for the comparison (F-32) to answer:**
 1. How far apart are the national totals, and how much of that is the UN edition and year?
-2. With totals equalised, how much of each country's population sits in the same places, at
+2. With totals equalized, how much of each country's population sits in the same places, at
    the finest, district and regional levels?
 3. Who finds people where the other has none, and is that rural homes, new suburbs, or
    noise?
-4. Is the difference systematic (always WorldPop lower in villages, higher in city centres)
+4. Is the difference systematic (always WorldPop lower in villages, higher in city centers)
    or country by country?
 5. For a typical Tally question (a town, a district, a 10 km circle), how different is the
    answer?
 
 ## Other datasets
 
-| Dataset | Made by | Resolution | Years | Licence | For Tally |
+| Dataset | Made by | Resolution | Years | License | For Tally |
 | --- | --- | --- | --- | --- | --- |
 | GHS-POP R2023A | EU Joint Research Centre | 100 m (Mollweide projection) and 1 km | Every 5 years 1975–2020; 2025 and 2030 projected | CC BY 4.0 | A useful third opinion in the comparison, not a replacement: it spreads GPW's census counts over GHSL built-up areas and had the largest rural undercount in the 2025 study |
 | LandScan Global | Oak Ridge National Laboratory | 1 km | Yearly, 2000 on | CC BY 4.0 since 2022 | No: it maps *ambient* population (where people are over 24 hours, workplaces included), not where they live, and 1 km is too coarse for small shapes. A rough national cross-check at most |

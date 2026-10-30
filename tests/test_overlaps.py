@@ -74,6 +74,16 @@ def test_a_side_with_no_cgaz_unit_puts_the_whole_overlap_to_people():
     assert_partition(outlines, clipped)
 
 
+def test_a_pair_kept_by_both_is_not_cut():
+    # Two rasters that each hold only their own people: both clips keep the overlap.
+    outlines = {"AAA": A, "BBB": B}
+    p = {**pair("AAA", "BBB", None), "kept_by_both": True}
+    clipped = clips(outlines, [p], UNITS)
+    assert clipped["AAA"].equals(A) and clipped["BBB"].equals(B)
+    assert ov.kept_by_both("RUS", "CHN") and ov.kept_by_both("HKG", "CHN")
+    assert not ov.kept_by_both("CHN", "VNM") and not ov.kept_by_both("HKG", "MAC")
+
+
 def test_three_overlapping_outlines_still_partition():
     outlines = {"AAA": box(0, 0, 2, 2), "BBB": box(1, 0, 3, 2), "CCC": box(0.5, 1, 2.5, 3)}
     units = {"AAA": box(-1, -1, 1.5, 1.5), "BBB": box(1.5, -1, 4, 1.5), "CCC": box(-1, 1.5, 4, 4)}
@@ -145,6 +155,12 @@ def test_cgaz_units_reads_and_merges_rows(tmp_path):
     assert list(units) == ["AAA"]
     assert units["AAA"].equals(box(0, 0, 2, 1))
     assert ov.cgaz_units([], path) == {}
+    # CGAZ files Kosovo as XKX, geoBoundaries' code; Tally (WorldPop, Natural Earth) as KOS.
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "INSERT INTO globalADM0 VALUES (?, ?, ?)", (4, gpkg_blob(box(7, 7, 8, 8)), "XKX")
+        )
+    assert ov.cgaz_units(["KOS"], path)["KOS"].equals(box(7, 7, 8, 8))
 
 
 def write_outline(path, geom, **tally):
@@ -176,6 +192,7 @@ def boundaries(tmp_path, monkeypatch):
     monkeypatch.setattr(ov, "fetch_boundary", lambda iso3: files[iso3])
     monkeypatch.setattr(gb, "fetch_boundary", lambda iso3: files[iso3])
     monkeypatch.setattr(ov, "CLIP_DIR", tmp_path / "clip")
+    monkeypatch.setattr(gb, "GROWN_CACHE", tmp_path / "grown")
     return files
 
 
@@ -262,7 +279,6 @@ def test_a_grown_clip_reaches_past_its_outline_but_keeps_its_area(boundaries, mo
     from ingest.boundaries import land_area_km2, outline_shape
 
     monkeypatch.setitem(gb.CLIP_GROW_DEG, "CCC", 0.1)
-    monkeypatch.setitem(ov.CLIP_GROW_DEG, "CCC", 0.1)
     path = ov.clip_path("CCC", split_doc())  # in no pair, but grown
     assert path.parent.name == "clip"
     clip = outline_shape(path)
@@ -273,15 +289,95 @@ def test_a_grown_clip_reaches_past_its_outline_but_keeps_its_area(boundaries, mo
     )
 
 
-def test_a_grown_clip_is_cut_at_its_neighbour_along_cgaz(boundaries, monkeypatch):
+def test_a_grown_clip_is_cut_at_its_neighbor_along_cgaz(boundaries, monkeypatch):
     from ingest import boundaries as gb
     from ingest.boundaries import outline_shape
 
     monkeypatch.setitem(gb.CLIP_GROW_DEG, "BBB", 0.2)
-    monkeypatch.setitem(ov.CLIP_GROW_DEG, "BBB", 0.2)
     clip = outline_shape(ov.clip_path("BBB", split_doc(), units=UNITS))
     # Grown 0.2 it reaches into AAA's outline as far as x 0.8, but CGAZ gives AAA all of
     # that west of 1.5; the strips beside AAA's outline (sea, here) stay BBB's.
     assert ov.polygonal(clip.intersection(A)).equals(box(1.5, 0, 2, 1))
     assert clip.contains(box(0.9, 1.05, 3.1, 1.15))
     assert clip.bounds[2] == pytest.approx(3.2)
+
+
+def test_a_clip_can_be_grown_from_natural_earth_too(boundaries, monkeypatch):
+    from ingest import boundaries as gb
+
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "CCC", 0.1)
+    before = ov.split_key("CCC", split_doc())
+    monkeypatch.setattr(gb, "CLIP_WITH_NATURAL_EARTH", {"CCC"})
+    monkeypatch.setattr(gb, "natural_earth_land", lambda iso3: box(11, 10, 12, 11))
+    # Natural Earth's island east of the coarse outline is in the clip, grown too.
+    assert gb.clip_base("CCC").contains(box(9.95, 10, 12.05, 11))
+    assert ov.split_key("CCC", split_doc()) != before  # the cached clip is redone
+
+
+def test_a_clip_can_leave_another_countrys_outline_out(boundaries, monkeypatch, tmp_path):
+    from ingest import boundaries as gb
+
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "CCC", 0.1)
+    before = ov.split_key("CCC", split_doc())
+    files = {**boundaries, "DDD": write_outline(tmp_path / "DDD.geojson", box(10.5, 10.5, 12, 12))}
+    monkeypatch.setattr(gb, "fetch_boundary", lambda iso3: files[iso3])
+    monkeypatch.setattr(gb, "CLIP_LEAVES_OUT", {"CCC": "DDD"})
+    clip = gb.clip_base("CCC")
+    # Grown 0.1 deg, less DDD's outline, whose pack takes CCC's people there.
+    assert clip.contains(box(9.95, 9.95, 10.45, 11.05))
+    assert clip.intersection(box(10.5, 10.5, 12, 12)).area == pytest.approx(0)
+    assert ov.split_key("CCC", split_doc()) != before  # the cached clip is redone
+
+
+def test_a_worldpop_place_from_natural_earth_is_not_cut_back_in_its_clip(boundaries, monkeypatch):
+    from ingest import boundaries as gb
+
+    monkeypatch.setitem(gb.ADM0_FROM_NATURAL_EARTH, "CCC", 0.05)
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "CCC", 0.05)
+    # Its outline file stops at a neighbor's unit at x 11; its clip does not.
+    monkeypatch.setattr(gb, "natural_earth_land", lambda iso3: box(10, 10, 11.5, 11))
+    assert gb.clip_base("CCC").contains(box(9.96, 10, 11.54, 11))
+
+
+def test_a_clip_is_redone_when_a_neighbor_it_cuts_is_grown_differently(monkeypatch):
+    from ingest import boundaries as gb
+
+    before = {k: ov.split_key(k, split_doc()) for k in ("AAA", "BBB", "CCC")}
+    # BBB grown further reaches deeper into AAA, so AAA's clip gives away more.
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "BBB", 0.2)
+    after = {k: ov.split_key(k, split_doc()) for k in ("AAA", "BBB", "CCC")}
+    assert after["AAA"] != before["AAA"] and after["BBB"] != before["BBB"]
+    assert after["CCC"] == before["CCC"]  # in no pair with BBB
+    # An uncut pair gives nothing away: the other side's grow does not matter.
+    uncut = {**split_doc(), "pairs": [{**pair("AAA", "BBB", None), "kept_by_both": True}]}
+    key = ov.split_key("AAA", uncut)
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "BBB", 0.3)
+    assert ov.split_key("AAA", uncut) == key
+
+
+def test_a_place_added_to_a_country_is_clipped_to_what_the_country_keeps(
+    boundaries, monkeypatch, tmp_path
+):
+    from ingest import boundaries as gb
+    from ingest.boundaries import outline_shape
+
+    boundaries["PPP"] = write_outline(tmp_path / "PPP.geojson", box(5, 5, 6, 6))
+    monkeypatch.setattr(gb, "CLIP_LEAVES_OUT", {"PPP": "AAA"})
+    # AAA gives BBB its overlap east of x 1.5: PPP's people there are BBB's pack's too.
+    path = ov.added_clip_path("AAA", "PPP", split_doc(), units=UNITS)
+    assert outline_shape(path).equals(box(0, 0, 1.5, 1))
+    assert ov.added_clip_path("AAA", "PPP", split_doc(), units=UNITS) == path  # cached
+    # A place that leaves no country's outline out is clipped to its own.
+    assert ov.added_clip_path("BBB", "CCC", split_doc()) == boundaries["CCC"]
+
+
+def test_a_grown_outline_is_grown_once(boundaries, monkeypatch):
+    from ingest import boundaries as gb
+
+    monkeypatch.setitem(gb.CLIP_GROW_DEG, "CCC", 0.1)
+    first = gb.clip_base("CCC")
+    assert len(list(gb.GROWN_CACHE.glob("*.wkb"))) == 1
+    calls = []
+    real = shapely.Polygon.buffer
+    monkeypatch.setattr(shapely.Polygon, "buffer", lambda *a, **k: calls.append(a) or real(*a, **k))
+    assert gb.clip_base("CCC").equals(first) and calls == []

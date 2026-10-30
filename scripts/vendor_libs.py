@@ -9,7 +9,7 @@ track the site. Each library now ships with the shell instead.
 
 For every pinned package this downloads the release tarball named in the npm registry,
 checks it against the registry's published sha512 `integrity`, and copies the few files
-the page loads, plus the licence, into `web/vendor/<name>@<version>/`. The files are
+the page loads, plus the license, into `web/vendor/<name>@<version>/`. The files are
 byte-identical to the npm release (and to what unpkg served). `web/vendor/MANIFEST.json`
 records each file's sha256; tests/test_vendor.py checks the tree against it.
 
@@ -37,18 +37,18 @@ from ingest.fetch import get_bytes
 VENDOR = Path(__file__).resolve().parent.parent / "web" / "vendor"
 REGISTRY = "https://registry.npmjs.org/{name}/{version}"
 
-# name -> (version, files the page loads, licence: a path in the tarball or a URL).
+# name -> (version, files the page loads, license: a path in the tarball or a URL).
 # Terra Draw's tarballs carry no LICENSE file (package.json says MIT), so it comes from
 # the project's repository.
-TERRA_DRAW_LICENCE = "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
+TERRA_DRAW_LICENSE = "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
 PACKAGES: dict[str, tuple[str, list[str], str]] = {
     "maplibre-gl": ("5.24.0", ["dist/maplibre-gl.js", "dist/maplibre-gl.css"], "LICENSE.txt"),
     "h3-js": ("4.5.0", ["dist/h3-js.umd.js"], "LICENSE"),
-    "terra-draw": ("1.34.0", ["dist/terra-draw.umd.js"], TERRA_DRAW_LICENCE),
+    "terra-draw": ("1.34.0", ["dist/terra-draw.umd.js"], TERRA_DRAW_LICENSE),
     "terra-draw-maplibre-gl-adapter": (
         "1.4.1",
         ["dist/terra-draw-maplibre-gl-adapter.umd.js"],
-        TERRA_DRAW_LICENCE,
+        TERRA_DRAW_LICENSE,
     ),
     # The panel's typefaces (SIL OFL 1.1), Latin subset only; style.css declares them.
     "@fontsource/barlow": (
@@ -68,7 +68,7 @@ def sri(data: bytes) -> str:
     return "sha512-" + base64.b64encode(hashlib.sha512(data).digest()).decode()
 
 
-def vendor_one(name: str, version: str, files: list[str], licence: str) -> dict:
+def vendor_one(name: str, version: str, files: list[str], license: str) -> dict:
     meta = json.loads(get_bytes(REGISTRY.format(name=name, version=version)))
     tgz = get_bytes(meta["dist"]["tarball"])
     if sri(tgz) != meta["dist"]["integrity"]:
@@ -78,13 +78,13 @@ def vendor_one(name: str, version: str, files: list[str], licence: str) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     record = {"version": version, "tarball": meta["dist"]["tarball"], "files": {}}
     with tarfile.open(fileobj=io.BytesIO(tgz)) as tar:
-        wanted = files + ([] if licence.startswith("https://") else [licence])
+        wanted = files + ([] if license.startswith("https://") else [license])
         for rel in wanted:
             data = tar.extractfile(f"package/{rel}").read()
             record["files"][Path(rel).name] = place(out / Path(rel).name, data, exists)
-    if licence.startswith("https://"):
-        record["files"]["LICENSE"] = place(out / "LICENSE", get_bytes(licence), exists)
-        record["licence_from"] = licence
+    if license.startswith("https://"):
+        record["files"]["LICENSE"] = place(out / "LICENSE", get_bytes(license), exists)
+        record["license_from"] = license
     return record
 
 
@@ -102,8 +102,8 @@ def place(dest: Path, data: bytes, check_only: bool) -> str:
 def main() -> None:
     VENDOR.mkdir(parents=True, exist_ok=True)
     manifest = {}
-    for name, (version, files, licence) in PACKAGES.items():
-        manifest[f"{name}@{version}"] = vendor_one(name, version, files, licence)
+    for name, (version, files, license) in PACKAGES.items():
+        manifest[f"{name}@{version}"] = vendor_one(name, version, files, license)
         print(f"{name}@{version}: integrity OK, {len(files)} file(s)")
     (VENDOR / "MANIFEST.json").write_text(json.dumps(manifest, indent=2) + "\n")
     # Scoped packages (@fontsource/barlow) sit one level down, in their scope's folder.

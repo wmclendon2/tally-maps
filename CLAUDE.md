@@ -10,12 +10,15 @@ Read it before changing the pipeline, the pack format or the resolver.
 - **A static app, no server or database.** `scripts/build_packs.py` turns rasters into
   per-country packs in `data/packs/`; `scripts/build_static.py` writes `dist/` = `web/` +
   packs + the no-data mask; `web/static.js` answers in the browser. All 196 Meta countries
-  have packs, plus CAN and GRL from WorldPop. `ingest/resolve.py` is the Python reference
+  have packs (Jersey's from WorldPop), plus 37 from WorldPop (233). `ingest/resolve.py` is the Python reference
   for static.js's resolution rule. (API mode, PostGIS + FastAPI, was retired on 2026-10-15;
   batch upload, F-02, is planned in the browser.)
 - Data: Meta HRSL 30 m via HDX (`ingest/hdx.py`), WorldPop 100 m where Meta has no data
-  (CAN, GRL, JEY, `ingest/worldpop_hub.py`), clipped to geoBoundaries ADM0 (Natural Earth for
-  HKG/MAC/JEY/VIR/PCN/GRL, `ingest/boundaries.py`). Base H3 res 9, pyramid down to res 3.
+  (38 places, `ingest.config.WORLDPOP_COUNTRIES`; `ingest/worldpop_hub.py`; Norfolk Island's
+  people go in Australia's pack and the Palestinian Territories' in East Jerusalem in
+  Israel's, `build_packs.ADDED_TO`), clipped to geoBoundaries ADM0
+  (Natural Earth for HKG/MAC/JEY/VIR/PCN/GRL/SXM/MAF/SPM/ESH, Finland's ADM1 unit for ALA,
+  `ingest/boundaries.py`). Base H3 res 9, pyramid down to res 3.
 - Docs: `README.md` (for people without an AI tool: every step a plain command; keep it and
   the `Makefile` in step with CLI flags), `docs/ARCHITECTURE.md`, `docs/VERIFICATION.md`
   (methods and baselines of the checks), `docs/DATA_SOURCES.md` (Meta vs WorldPop and the
@@ -36,7 +39,7 @@ Read it before changing the pipeline, the pack format or the resolver.
   change. app.js raises `StaleAppError` ("Tally has been updated. Reload to get the
   latest.", with the Reload notice) when an answer lacks `base_resolution`/`total` or a cell
   lacks `h3`/`population`.
-- A tab open across a deploy (F-31): a 404 on a pack makes static.js reread the catalogue
+- A tab open across a deploy (F-31): a 404 on a pack makes static.js reread the catalog
   and retry once (`withFreshCatalog`); errors a person sees never carry an HTTP status. The
   "new version" notice compares the worker's `SHELL_VERSION` (sw.js answers "version")
   with the page's `?v=`; Reload keeps the count in `sessionStorage`. Checked by
@@ -66,7 +69,7 @@ Read it before changing the pipeline, the pack format or the resolver.
 ## Data gotchas
 
 - Meta country files cover the country's **bounding box**, not its outline (CMR's holds
-  106 M people, 79.6 M of them in neighbours). Clipping is mandatory; `--no-clip` is for
+  106 M people, 79.6 M of them in neighbors). Clipping is mandatory; `--no-clip` is for
   debugging.
 - Some Meta GeoTIFFs store strips out of row order; `raster_to_h3` reads those in file
   order (`read_order="auto"`), or reading a zip member backwards re-inflates (DZA 26 min ->
@@ -79,22 +82,33 @@ Read it before changing the pipeline, the pack format or the resolver.
   `ingest/fetch.py` (curl first, urllib fallback, retries on 408/425/429/5xx). Some proxies
   truncate HTTP/1.1 bodies from urllib with no error; keep curl first.
 - Meta has no file for RUS, CHN, PAK, CAN, GRL, MAR, SDN, SSD, SOM, ESH (and others; see the
-  coverage map). Meta's JEY file has no data over Jersey. CAN, GRL and JEY are WorldPop
-  100 m (`build_packs.SOURCE_FOR`). WorldPop's files hold only their own country (cut at
-  LSIB), so Canada's clip is its outline grown 0.1° (`boundaries.CLIP_GROW_DEG`; the plain
-  outline cut off 9,429 people) and cut at built neighbours by the overlap split; its map
-  outline, no-data mask and area stay plain. geoBoundaries publishes outlines as CC BY
-  4.0, but each outline's source keeps its own licence (73 of the 198 are ODbL, mostly
-  OpenStreetMap; NOTICE.md lists them). Before building a new country, take it into the overlap
-  split (below): Meta's bounding-box files can hold people inside a neighbour's claim
+  coverage map). Meta's JEY file has no data over Jersey. The 38 in
+  `WORLDPOP_COUNTRIES` are WorldPop 100 m (`build_packs.SOURCE_FOR`). WorldPop's files hold
+  only their own country (cut at LSIB), so a WorldPop country's clip is its outline grown
+  0.1° (`boundaries.CLIP_GROW_DEG`; coarse outlines cut off Bandar Abbas and Nampo), or its
+  Natural Earth unit grown and not cut back at the other units (Natural Earth's line across
+  St Martin lost a third of Sint Maarten), and cut at built Meta neighbors by the overlap
+  split; its map outline, no-data mask and area stay plain. China's clip adds Natural
+  Earth's coast (`CLIP_WITH_NATURAL_EARTH`; geoBoundaries' lost 2.45 M). Two WorldPop
+  countries' overlap is not cut: both clips keep it (`overlaps.kept_by_both`, also CHN with
+  HKG and MAC), as no pixel is in both files (`audit_overlaps.py` compares one grid pixel by
+  pixel). Western Sahara is the whole territory (`boundaries.NE_PART_OF`; Natural Earth's is
+  the strip east of the Moroccan wall), and Morocco's drawn outline and area stop at its
+  27°40′ N line (`boundaries.outline_path`). A place added to another's pack is clipped by
+  `overlaps.added_clip_path` (the host's outline less what it gives away) and audited as
+  `PLACE@HOST`. Clip keys (`overlaps.split_key`) cover the grow of the neighbors a clip
+  is cut at; grown outlines are cached in `data/boundaries/grown/`.
+  geoBoundaries publishes outlines as CC BY 4.0, but each outline's source keeps its own
+  license (85 of the 233 are ODbL, mostly OpenStreetMap; NOTICE.md lists them). Before building a new country, take it into the overlap
+  split (below): Meta's bounding-box files can hold people inside a neighbor's claim
   (IND's outline takes in Pakistan-administered Kashmir), so both packs would count them,
   and `audit_overlaps.py --candidate XXX` shows how many. Kosovo is `KOS` at WorldPop,
   `XKX` at geoBoundaries. geoBoundaries has no ADM0 for PRI (`ADM0_FROM_PARENT` takes USA
   ADM1).
 - An outline is not proof of data (IND's claims Pakistan-administered Kashmir, FIN's holds
-  Aland): the no-data mask keeps an overlap grey unless the pack has >= 5 people/km2 there
+  Aland): the no-data mask keeps an overlap gray unless the pack has >= 5 people/km2 there
   (`CLAIM_SHARE`, `MIN_DENSITY` in `build_static.py`).
-- Neighbouring outlines overlap where their sources disagree (1.67 M people were in two
+- Neighboring outlines overlap where their sources disagree (1.67 M people were in two
   packs). Packs are clipped to `ingest/overlaps.clip_path` (the outline minus the overlaps
   given away along CGAZ, cached in `data/boundaries/clip/`), not the raw outline. Who
   gets each overlap's rest is checked in (`reference/overlap_split.json`); a build reads
@@ -110,7 +124,7 @@ Read it before changing the pipeline, the pack format or the resolver.
 ## Commands
 
 Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cache`); the
-`Makefile` targets honour it (`UV_CACHE_DIR=.uv-cache make test`).
+`Makefile` targets honor it (`UV_CACHE_DIR=.uv-cache make test`).
 
 - Env: `UV_CACHE_DIR=.uv-cache uv sync` (add `--group browser` for the browser checks)
 - Tests: `UV_CACHE_DIR=.uv-cache uv run pytest -q`; lint: `uv run ruff check .` (or `make check`)
@@ -127,14 +141,14 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
   on a local port inside the process.
 - Verify: `UV_CACHE_DIR=.uv-cache uv run python scripts/verify_country.py --country CMR`
   and `scripts/verify_cities.py [--country XXX] [--min-pop 0]`.
-- Catalogue: `uv run python -m ingest.hdx` (Meta's countries and download sizes).
+- Catalog: `uv run python -m ingest.hdx` (Meta's countries and download sizes).
 - Overlaps: `UV_CACHE_DIR=.uv-cache uv run python scripts/split_overlaps.py [--country XXX]`
   (writes `reference/overlap_split.json` and the clips; all packs) and
   `scripts/audit_overlaps.py [--country XXX] [--candidate XXX]` (`make overlaps`, ~1 h).
 - Coverage map: `UV_CACHE_DIR=.uv-cache uv run python scripts/coverage_map.py`
   (writes the committed `docs/img/coverage-map.png` + `coverage.json`).
 - Link-preview image: `UV_CACHE_DIR=.uv-cache uv run --group browser python scripts/og_image.py
-  --dist DIR` (a build of every country, so neighbours are not greyed) writes `web/og-image.jpg`
+  --dist DIR` (a build of every country, so neighbors are not grayed) writes `web/og-image.jpg`
   (1200x630, < 300 KB); the `og:*` tags in `index.html` describe it.
 - Vendored libs: `scripts/vendor_libs.py` (bump `PACKAGES`, rerun, fix the paths in
   `index.html`/`sw.js`, bump the shell version; it never deletes old versions).
@@ -145,9 +159,8 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
 - `docs/ROADMAP.md` is the feature pipeline: the maintainer decides what moves. File new
   ideas in Inbox with a first sizing, shape items when asked, and record shipped items with
   the date.
-- Not built yet: WorldPop 100 m for the rest of the countries Meta lacks (F-10, batches in
-  the roadmap; disputed borders go through the overlap split, F-30), parity polygons outside
-  Africa/Brazil (F-28), the browser checks in CI (F-27 level 2).
+- Not built yet: parity polygons outside Africa/Brazil (F-28), the browser checks in CI
+  (F-27 level 2).
 - CI: `.github/workflows/check.yml` runs `make check`'s steps on every push and pull
   request (no data needed). Keep the actions pinned by commit hash; a push that changes a
   workflow needs the `workflow` scope on the GitHub login.

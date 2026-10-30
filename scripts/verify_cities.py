@@ -28,7 +28,7 @@ way the browser would, and measures:
 
 The verdict rests on the *aggregate*, because a georeferencing fault is systematic:
 every city moves the same way. Individual cities are noisy -- a coastal city loses
-half its box to the sea, a sprawling one has its mass off-centre, a Natural Earth
+half its box to the sea, a sprawling one has its mass off-center, a Natural Earth
 point may sit a few km off downtown -- and those errors point in random directions,
 so they cancel. A real shift does not cancel.
 
@@ -54,7 +54,7 @@ country is built from its own HRSL raster, so a single misregistered file moves
 only that country's cities. Thirteen shifted cities among a hundred barely nudge the
 global mean. The script therefore also tests each country on its own, against a null
 built by reshuffling which country each city belongs to and taking the largest
-normalised offset in every shuffle -- which handles both the heavy tails and the
+normalized offset in every shuffle -- which handles both the heavy tails and the
 ~50 simultaneous comparisons without a separate correction.
 
 Power depends on how many cities a country has: with 13 it detects an 8 km shift
@@ -84,7 +84,8 @@ from shapely.geometry import box
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ingest.config import SOURCES
+from ingest.config import SOURCES, source_keys
+from ingest.continents import NATURAL_EARTH_CODE
 
 console = Console()
 app = typer.Typer(add_completion=False)
@@ -92,14 +93,9 @@ app = typer.Typer(add_completion=False)
 REFERENCE = Path(__file__).resolve().parent.parent / "reference" / "cities.json"
 EARTH_R_KM = 6371.0088
 
-# Natural Earth codes disputed and partly-recognised territories separately; our data
-# follows geoBoundaries/HDX, which file them under the ISO3 of the recognised state.
-ALIASES = {
-    "SOL": "SOM",  # Somaliland
-    "SAH": "ESH",  # Western Sahara
-    "PSX": "PSE",  # Palestinian Territories
-    "KOS": "XKX",  # Kosovo (no ISO3; XKX is the usual stand-in)
-}
+# Natural Earth codes disputed and partly-recognized territories separately, and files a
+# few places Tally builds into another country's pack under their own code.
+ALIASES = NATURAL_EARTH_CODE
 # Research stations on a continent with no population raster.
 SKIP_ISO3 = {"ATA"}
 
@@ -235,7 +231,7 @@ class Aggregate:
 
         Sum n independent 2-D offsets with no real shift and the mean is Rayleigh
         distributed with scale sigma/sqrt(n), where 2*sigma^2 is the mean squared
-        offset. So the bar scales as 1/sqrt(n): a fixed kilometre threshold would
+        offset. So the bar scales as 1/sqrt(n): a fixed kilometer threshold would
         wave through a shift in a 100-city run and cry wolf on a 7-city one.
         """
         if self.n < 2 or self.mean_square <= 0:
@@ -555,16 +551,17 @@ def main(
     from packstore import PackStore
 
     store = PackStore(packs) if packs else PackStore()
-    source_of = {c.upper(): e["source"] for c, e in store.entries.items()}
-    if source is not None and source not in source_of.values():
-        raise typer.BadParameter(f"no {source} packs; have {sorted(set(source_of.values()))}")
-    built = {c for c, s in source_of.items() if source is None or s == source}
+    source_of = {c.upper(): source_keys(e["source"]) for c, e in store.entries.items()}
+    have = sorted({k for keys in source_of.values() for k in keys})
+    if source is not None and source not in have:
+        raise typer.BadParameter(f"no {source} packs; have {have}")
+    built = {c for c, keys in source_of.items() if source is None or source in keys}
     if wanted:
         missing = wanted - built
         if missing:
             raise typer.BadParameter(f"no pack built for: {sorted(missing)}")
         built = wanted
-    used = sorted({source_of[c] for c in built})
+    used = sorted({k for c in built for k in source_of[c]})
     base = min(store.base_resolution(s) for s in used)
     if resolution > base:
         raise typer.BadParameter(f"res {resolution} is finer than the base res {base} of {used}")

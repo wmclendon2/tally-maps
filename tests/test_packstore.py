@@ -85,8 +85,8 @@ def test_check_catches_a_changed_unreadable_or_missing_file(store):
     assert [p for p in store.check("AAA") if "missing" in p]
 
 
-def test_check_catches_a_catalogue_total_that_disagrees(store, tmp_path):
+def test_check_catches_a_catalog_total_that_disagrees(store, tmp_path):
     cat = json.loads((tmp_path / "catalog.json").read_text())
     cat["countries"][0]["total"] += 500
     (tmp_path / "catalog.json").write_text(json.dumps(cat))
-    assert any("catalogue says" in p for p in PackStore(tmp_path).check("AAA"))
+    assert any("catalog says" in p for p in PackStore(tmp_path).check("AAA"))

@@ -53,7 +53,7 @@ def expand_rasters(paths: list[RasterPath]) -> list[str]:
 
     A .zip is not extracted: each GeoTIFF inside becomes a GDAL virtual path
     ('zip://archive.zip!member.tif'), which reads as fast as the extracted
-    file and avoids materialising the ~300x larger uncompressed raster.
+    file and avoids materializing the ~300x larger uncompressed raster.
     """
     out: list[str] = []
     for p in paths:

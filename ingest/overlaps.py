@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Overlapping outlines split between their two countries, so no one is counted twice (F-30).
 
-Each country is clipped to its own geoBoundaries outline, and neighbouring outlines (from
+Each country is clipped to its own geoBoundaries outline, and neighboring outlines (from
 different national sources) disagree about where the border runs, so the people in the
 strips between them were in both packs: 1.67 M across 161 pairs (scripts/audit_overlaps.py).
 
@@ -14,8 +14,14 @@ ties to the lower ISO3 code. So does the whole overlap when CGAZ has no unit for
 it folds Puerto Rico, Guam, the US Virgin Islands and others into their parent, whose
 raster holds no one there (split along CGAZ, Puerto Rico's 3.6 M people would go to the
 USA's pack, which has none of them). A country's clip is its own outline minus the pieces
-it gives away; for a WorldPop country the outline is first grown about 10 km
-(boundaries.CLIP_GROW_DEG), and the split cuts it at its built neighbours.
+it gives away; for a WorldPop country the outline is first grown 0.1 degree, about 10 km
+north-south (boundaries.CLIP_GROW_DEG), and the split cuts it at its built neighbors.
+
+Two rasters that each hold only their own people can share ground without counting anyone
+twice, so their pair is not cut: both keep the overlap (KEPT_BY_BOTH). That is any two
+WorldPop countries, each file cut at LSIB: cut along CGAZ's coarser line, Heihe went to
+Russia's clip and Hunchun to North Korea's, whose files have none of China's people, and
+464 k of them were in no pack (2026-10-22).
 
 Who gets the rest needs both rasters, so scripts/split_overlaps.py decides once for every
 overlapping pair, a < b, and records it in reference/overlap_split.json (checked in). A
@@ -24,11 +30,12 @@ overlap inside b's side, and B gives A the rest of the overlap, so the two clips
 overlap and together keep all of it. CGAZ's line inside the overlaps is not checked in
 instead: the overlaps are long, detailed strips, and the line through them alone came to
 22 MB. Clips are cached as data/boundaries/clip/<ISO3>_ADM0.geojson, redone when the
-country's pairs change.
+country's pairs change, or how its or a neighbor's outline is grown (split_key).
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import sqlite3
@@ -40,8 +47,17 @@ import shapely
 from shapely.geometry import Polygon, mapping
 from shapely.geometry.base import BaseGeometry
 
-from ingest.boundaries import CLIP_GROW_DEG, area_km2, clip_base, fetch_boundary
-from ingest.config import BOUNDARY_DIR, DATA_DIR, ROOT
+from ingest.boundaries import (
+    CLIP_GROW_DEG,
+    GEOBOUNDARIES_CODE,
+    clip_base,
+    clip_settings,
+    fetch_boundary,
+    land_area_km2,
+    outline_path,
+    outline_shape,
+)
+from ingest.config import BOUNDARY_DIR, DATA_DIR, ROOT, WORLDPOP_COUNTRIES
 from ingest.fetch import get_bytes
 
 # CGAZ as of geoBoundaries' 2024-04-20 update, its latest (checked 2026-10-20), pinned
@@ -58,6 +74,19 @@ CLIP_DIR = BOUNDARY_DIR / "clip"
 # the rest of CGAZ's units never meets the overlap.
 NEAR_DEG = 0.001
 EMPTY = Polygon()
+# Pairs besides two WorldPop countries whose rasters each hold only their own people
+# there: Hong Kong's and Macau's Meta files are masked to the territory, and China's
+# WorldPop file leaves both out. Of the 126 k and 98 k people China's file holds in those
+# overlaps, Hong Kong's pack has at most 1.0 k and Macau's 4.3 k in the same res-9 cells
+# (2026-10-22); cut, they went whole to the territory, whose file has no one in Shenzhen
+# or Zhuhai.
+KEPT_BY_BOTH = {("CHN", "HKG"), ("CHN", "MAC")}
+
+
+def kept_by_both(a: str, b: str) -> bool:
+    """Whether a pair's overlap is left uncut, in both clips."""
+    a, b = sorted((a, b))
+    return {a, b} <= WORLDPOP_COUNTRIES or (a, b) in KEPT_BY_BOTH
 
 
 def polygonal(g: BaseGeometry) -> BaseGeometry:
@@ -88,8 +117,10 @@ def gpkg_geometry(blob: bytes) -> BaseGeometry:
 
 
 def cgaz_units(codes: Iterable[str], path: Path | None = None) -> dict[str, BaseGeometry]:
-    """CGAZ's units for these ISO3 codes, those it has, each made valid."""
-    codes = sorted(set(codes))
+    """CGAZ's units for these ISO3 codes, those it has, each made valid. CGAZ uses
+    geoBoundaries' codes (Kosovo is XKX), so those are translated both ways."""
+    ours = {GEOBOUNDARIES_CODE.get(c, c): c for c in set(codes)}
+    codes = sorted(ours)
     if not codes:
         return {}
     path = path or fetch_cgaz()
@@ -105,7 +136,7 @@ def cgaz_units(codes: Iterable[str], path: Path | None = None) -> dict[str, Base
     found: dict[str, list] = {}
     for code, blob in rows:
         g = gpkg_geometry(blob)
-        found.setdefault(code, []).append(g if g.is_valid else g.buffer(0))
+        found.setdefault(ours[code], []).append(g if g.is_valid else g.buffer(0))
     return {k: shapely.union_all(v) for k, v in sorted(found.items())}
 
 
@@ -161,7 +192,7 @@ def given_away(
     away = []
     for p in pairs:
         a, b = p["a"], p["b"]
-        if iso3 not in (a, b):
+        if iso3 not in (a, b) or p.get("kept_by_both"):
             continue
         overlap = overlap_of(outline(a), outline(b))
         if overlap.is_empty:
@@ -194,24 +225,25 @@ def pairs_of(iso3: str, split: dict) -> list[dict]:
 
 def split_key(iso3: str, split: dict) -> str:
     """What a country's clip depends on, besides the outlines: its pairs, CGAZ's file and
-    how far its outline is grown."""
-    doc = {
-        "cgaz": split["cgaz"]["sha256"],
-        "pairs": pairs_of(iso3, split),
-        "grow": CLIP_GROW_DEG.get(iso3),
-    }
+    how far its outline is grown (and from what, less what), and the same for each
+    neighbor it cuts, whose grown outline sets the overlap it gives away."""
+    pairs = pairs_of(iso3, split)
+    doc = {"cgaz": split["cgaz"]["sha256"], "pairs": pairs, **clip_settings(iso3)}
+    cut = {c for p in pairs if not p.get("kept_by_both") for c in (p["a"], p["b"])} - {iso3}
+    partners = {c: s for c in sorted(cut) if (s := clip_settings(c)) != {"grow": None}}
+    if partners:
+        doc["partners"] = partners
     return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def clip_doc(iso3: str, geometry: BaseGeometry, key: str, source: dict) -> dict:
     """A clip as GeoJSON, keeping its outline's metadata (a Natural Earth outline's land
     area, which its density is measured by). A grown clip reaches out to sea, so its area
-    is the plain outline's."""
+    is the plain outline's (cut where a place takes a part, outline_path)."""
     feature = next(iter(source.get("features") or [{}]), {})
     tally = {**source.get("tally", {}), "split": key}
-    if iso3 in CLIP_GROW_DEG and "land_area_km2" not in tally:
-        land = sum(area_km2(f["geometry"]) for f in source["features"] if f.get("geometry"))
-        tally["land_area_km2"] = round(land, 1)
+    if iso3 in CLIP_GROW_DEG:
+        tally.setdefault("land_area_km2", round(land_area_km2(outline_path(iso3)), 1))
     return {
         "type": "FeatureCollection",
         "tally": tally,
@@ -251,9 +283,42 @@ def clip_path(iso3: str, split: dict | None = None, *, units: dict | None = None
             raise RuntimeError(f"{SPLIT_PATH.name} was made with another CGAZ file")
         units = cgaz_units({c for p in pairs for c in (p["a"], p["b"])})
     geometry = clip_shape(iso3, pairs, outline, units)
-    doc = clip_doc(iso3, geometry, key, json.loads(src.read_text()))
+    write_clip(path, clip_doc(iso3, geometry, key, json.loads(src.read_text())))
+    return path
+
+
+def write_clip(path: Path, doc: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(doc))
     tmp.replace(path)
+
+
+def added_clip_path(
+    host: str, code: str, split: dict | None = None, *, units: dict | None = None
+) -> Path:
+    """What the raster of a place added to host's pack (build_packs.ADDED_TO) is clipped
+    to. A place whose own clip leaves host's outline out (CLIP_LEAVES_OUT) gives host its
+    people inside that outline: host's outline, not grown (the place's raster holds people
+    past it), less the overlaps host gives away, which a neighbor's pack counts. Any other
+    place is clipped to its own outline."""
+    host, code = host.upper(), code.upper()
+    if clip_settings(code).get("leaves_out") != host:
+        return fetch_boundary(code)
+    split = load_split() if split is None else split
+    pairs = pairs_of(host, split)
+    key = split_key(host, split) + ":" + code
+    path = CLIP_DIR / f"{code}_IN_{host}.geojson"
+    if path.exists() and json.loads(path.read_text()).get("tally", {}).get("split") == key:
+        return path
+    if units is None and pairs:
+        if split["cgaz"]["sha256"] != CGAZ_SHA256:
+            raise RuntimeError(f"{SPLIT_PATH.name} was made with another CGAZ file")
+        units = cgaz_units({c for p in pairs for c in (p["a"], p["b"])})
+    away = given_away(host, pairs, functools.cache(clip_base), units or {})
+    src = fetch_boundary(host)
+    geometry = polygonal(outline_shape(src).difference(away))
+    doc = clip_doc(host, geometry, key, json.loads(src.read_text()))
+    doc["tally"].pop("land_area_km2", None)  # never a country's area
+    write_clip(path, doc)
     return path

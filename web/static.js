@@ -20,7 +20,7 @@
  *
  * A deploy that rebuilds a country renames its pack files (they are named by content), so
  * a page loaded before it asks for files that are gone. A 404 on a pack makes a query read
- * the catalogue again and run once more (F-31); the page gets a "tally:data-updated"
+ * the catalog again and run once more (F-31); the page gets a "tally:data-updated"
  * event, and app.js offers a reload. */
 
 const TallyStatic = (() => {
@@ -50,7 +50,7 @@ const TallyStatic = (() => {
   let catalog = null;
   let catalogBase = null;
   const byRoot = new Map(); // res-3 cell -> parts whose footprint holds it
-  const parts = new Map(); // url -> part (catalogue entry plus iso3, name, maxRes)
+  const parts = new Map(); // url -> part (catalog entry plus iso3, name, maxRes)
   const tables = new Map(); // `${url}|${res}` -> {hi, lo, pop, bytes}, least recently used first
   let tableBytes = 0;
   const pendingTables = new Map(); // `${url}|${res}` -> Promise<table>, while loading
@@ -167,8 +167,8 @@ const TallyStatic = (() => {
     }
   }
 
-  // A pack the catalogue this page read lists, but the host no longer has: renamed by a
-  // later deploy. Never shown as it is; withFreshCatalog() reads the catalogue again.
+  // A pack the catalog this page read lists, but the host no longer has: renamed by a
+  // later deploy. Never shown as it is; withFreshCatalog() reads the catalog again.
   class PackGoneError extends Error {
     constructor(part) {
       super(`${part.name} data has moved`);
@@ -314,21 +314,21 @@ const TallyStatic = (() => {
       if (s.status === "fulfilled") got.set(needed[i].url, s.value);
       else failed.push({ part: needed[i], error: s.reason });
     });
-    // A renamed pack is not "missing": the caller reads the catalogue again and retries.
+    // A renamed pack is not "missing": the caller reads the catalog again and retries.
     const gone = failed.find((f) => isGone(f.error));
     if (gone) throw gone.error;
     if (failed.length && !got.size) throw failed[0].error;
     return { got, failed };
   }
 
-  // Drop stored parts the catalogue no longer lists (a rebuilt country gets new names).
+  // Drop stored parts the catalog no longer lists (a rebuilt country gets new names).
   async function pruneStored() {
     const stale = (await storedKeys()).filter((k) => !parts.has(k));
     if (stale.length) await idb("readwrite", (s) => stale.forEach((k) => s.delete(k)));
   }
 
   // `cache: "no-cache"` asks the host whether the file changed (a 304 if not), so a
-  // page never reads a catalogue its browser kept from an earlier deploy.
+  // page never reads a catalog its browser kept from an earlier deploy.
   async function getJson(url) {
     const r = await fetch(url, { cache: "no-cache" });
     if (!r.ok) throw new Error(`${url.pathname}: HTTP ${r.status}`);
@@ -337,7 +337,7 @@ const TallyStatic = (() => {
 
   const dataUrl = () => document.querySelector('meta[name="tally-data"]').content;
 
-  // The manifest and catalogue, read and checked; nothing is changed until both are in.
+  // The manifest and catalog, read and checked; nothing is changed until both are in.
   async function readCatalog(manifestUrl) {
     const base = new URL(manifestUrl, location.href);
     const m = await getJson(base);
@@ -350,7 +350,7 @@ const TallyStatic = (() => {
     return { m, cBase, c };
   }
 
-  // Index a catalogue's parts, replacing any read before. Tables already unpacked stay:
+  // Index a catalog's parts, replacing any read before. Tables already unpacked stay:
   // they are keyed by file name, and a name always means the same content.
   function install({ m, cBase, c }) {
     manifest = m;
@@ -387,7 +387,7 @@ const TallyStatic = (() => {
     return ready;
   }
 
-  // Read the manifest and catalogue again; true when they are not the ones this page has
+  // Read the manifest and catalog again; true when they are not the ones this page has
   // (another build date, or other pack files), and then tell the page.
   async function refresh() {
     await load(dataUrl());
@@ -401,8 +401,8 @@ const TallyStatic = (() => {
     return changed;
   }
 
-  // Run `ask`; if a pack it needs has been renamed, read the catalogue again and run it
-  // once more. A second miss, or a 404 with nothing new in the catalogue, ends in words a
+  // Run `ask`; if a pack it needs has been renamed, read the catalog again and run it
+  // once more. A second miss, or a 404 with nothing new in the catalog, ends in words a
   // person can act on, never an HTTP status.
   async function withFreshCatalog(ask) {
     try {
@@ -553,7 +553,8 @@ const TallyStatic = (() => {
     }
     return {
       total,
-      source: [...new Set(needed.map((p) => p.source))].join(", ") || "none",
+      // A pack may name two sources ("meta_hrsl, worldpop_100m"): list each one once.
+      source: [...new Set(needed.flatMap((p) => String(p.source).split(", ")))].join(", ") || "none",
       resolution,
       base_resolution: baseRes,
       cell_count: cells.length,
@@ -578,7 +579,7 @@ const TallyStatic = (() => {
       return {
         iso3: c.iso3,
         name: c.name,
-        continent: c.continent ?? null, // older catalogues lack it
+        continent: c.continent ?? null, // older catalogs lack it
         bytes: c.bytes,
         parts: c.parts.length,
         savedParts: saved.length,
@@ -664,7 +665,7 @@ const TallyStatic = (() => {
         total += t.pop[i];
       }
     return {
-      // The catalogue's figure when every part came: the cells are float32, so their sum
+      // The catalog's figure when every part came: the cells are float32, so their sum
       // can be a person off it (USA: 308,276,903 for 308,276,904).
       total: failed.length ? total : c.total,
       cells_total: total,

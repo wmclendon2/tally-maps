@@ -23,22 +23,24 @@ browser downloads the parts of the packs a question needs and answers it with
 from the Humanitarian Data Exchange. `ingest/hdx.py` finds each country's
 general-population GeoTIFF through the HDX CKAN API and needs no key. Meta covers 196
 countries and territories. Where Meta has no usable file, [WorldPop][worldpop] 100 m is used
-(`ingest/worldpop_hub.py`): for Canada and Greenland, which Meta has no file for, and
-Jersey, whose Meta file has no data over the island. WorldPop's files hold only their own
-country's people (cut at LSIB), so Canada's clip is its outline grown about 10 km, which
-takes in the coast and border towns a coarse outline cuts off, and the overlap split below
-cuts it at each built neighbour. Each pack records its source, so the app can say which one a number came from.
+(`ingest/worldpop_hub.py`) for 38 places (`ingest/config.WORLDPOP_COUNTRIES`): China,
+Russia, Pakistan, Canada, Iran and the others Meta has no file for, and Jersey, whose Meta
+file has no data over the island. WorldPop's files hold only their own country's people
+(cut at LSIB), so a WorldPop country's clip is its outline grown 0.1° (about 10 km
+north-south, less east-west far from the equator), which takes in the coast and border
+towns a coarse outline cuts off, and the overlap split below cuts it at each built
+neighbor. Each pack records its source, so the app can say which one a number came from.
 
 **Outlines.** Meta's country files cover the country's whole bounding box, not its
 outline. Cameroon's file holds 106 million people, 79.6 million of whom live in Nigeria,
-Chad and other neighbours. Every raster is therefore clipped to the country's
-[geoBoundaries][gb] ADM0 outline (CC BY 4.0; GADM's licence was avoided on purpose). Six
-territories with no usable geoBoundaries outline (HKG, MAC, JEY, VIR, PCN, GRL) are clipped
-to Natural Earth's outline, grown slightly to catch the coast and cut at the neighbours
+Chad and other neighbors. Every raster is therefore clipped to the country's
+[geoBoundaries][gb] ADM0 outline (CC BY 4.0; GADM's license was avoided on purpose). Eleven
+territories with no usable geoBoundaries outline (HKG, MAC, JEY, VIR, PCN, GRL, SXM, MAF,
+NFK, SPM, ESH) are clipped to Natural Earth's outline, grown slightly to catch the coast and cut at the neighbors
 (`ingest/boundaries.py`). Greenland's geoBoundaries coast runs inland of its towns and kept
 265 of its 55,581 people.
 
-**Overlaps.** Neighbouring outlines come from different national sources and disagree
+**Overlaps.** Neighboring outlines come from different national sources and disagree
 about where a border runs, so they overlap in strips along it, and Meta's bounding-box
 files put the people there in both packs (1.67 million before the fix). So where two
 outlines overlap, the overlap is split along [geoBoundaries CGAZ][cgaz], a global set with
@@ -46,22 +48,28 @@ no overlaps: the part in A's CGAZ unit goes to A, the part in B's to B, and the 
 neither, or in a disputed unit of its own) to the side whose raster holds more people
 there. When CGAZ has no unit for one side (it folds Puerto Rico, Guam and other
 territories into their parent, whose raster is empty there), the whole overlap goes by
-people. Each raster is clipped to its outline minus what it gives away
-(`ingest/overlaps.py`). Who gets the rest needs both rasters, so
+people. Two rasters that each hold only their own people (any two WorldPop countries, and
+China with Hong Kong or Macau) can share ground without counting anyone twice, so their
+overlap is not cut: both keep it. Each raster is clipped to its outline minus what it gives
+away (`ingest/overlaps.py`). A place whose raster is added to another country's pack
+(Palestine's people in East Jerusalem, in Israel's; Norfolk Island's, in Australia's;
+`build_packs.ADDED_TO`) is clipped the same way, so the audit reads it as its own outline.
+Morocco's geoBoundaries outline holds all of Western Sahara, which is built on its own, so
+its drawn outline and area stop at 27°40′ N (`boundaries.outline_path`). Who gets the rest needs both rasters, so
 `scripts/split_overlaps.py` decides it once and checks it in as
 `reference/overlap_split.json`; a build reads CGAZ itself (162 MB, downloaded once,
 pinned to one release and checked by hash). CGAZ alone was not used for clipping: its simplified coasts would
 drop about 20 million people, and it has no unit for 25 of Tally's territories.
 
 **Binning.** `ingest/raster.py` streams the raster window by window. Each populated pixel's
-centre goes into the H3 cell that contains it, at a base resolution of 9 (about 0.1 km²).
+center goes into the H3 cell that contains it, at a base resolution of 9 (about 0.1 km²).
 The cells are then rolled up into their parents down to resolution 3 (`ingest/pyramid.py`),
 so every level sums to the same total. Some Meta GeoTIFFs store their strips out of order;
 these are read in file order, which makes Algeria 15 times faster with identical output.
 
 **Whole people.** The models spread people in fractions: WorldPop gives each building in
 rural Canada a share, so most of Canada's finest hexagons held under half a person and the
-map showed coloured hexagons labelled "0 people". So the pyramid is converted to whole
+map showed colored hexagons labeled "0 people". So the pyramid is converted to whole
 people before it is packed (`whole_people` in `scripts/build_packs.py`). The country's
 rounded total is shared among its resolution-3 cells, then each cell's whole people among
 its seven children, in proportion to the model's figures, by largest remainder (ties to the
@@ -72,7 +80,7 @@ Canada's finest level went from 2.77 million cells to 0.94 million.
 
 ## The counting rule
 
-A drawn shape is covered with the H3 cells whose **centres** lie inside it
+A drawn shape is covered with the H3 cells whose **centers** lie inside it
 (`polygon_to_cells`). That makes any set of shapes that do not overlap a clean partition:
 adjacent shapes never count a cell twice and never leave a gap. The cost is that a cell on
 the edge is either fully in or fully out, so totals near edges are approximate at coarse
@@ -94,7 +102,7 @@ The resolution is chosen per question (`web/static.js`, with the Python referenc
 `catalog.json` that lists them, computed straight from the rasters.
 
 - **Format.** A pack is self-describing, because a copy saved in a browser outlives the
-  catalogue that listed it: the `TLYP` magic, a format major and minor version, a JSON
+  catalog that listed it: the `TLYP` magic, a format major and minor version, a JSON
   header (country, source, data version, sections, total), padding to 8 bytes, then for
   each resolution the sorted H3 indexes and float32 populations. The full layout is in the
   `build_packs.py` docstring.
@@ -103,7 +111,7 @@ The resolution is chosen per question (`web/static.js`, with the Python referenc
   cell whose resolution-3 parent is in its `footprint`, so the client knows exactly which
   parts a shape needs with no outlines at all. A first count over São Paulo downloads one
   part of Brazil, not the whole of it. Brazil has 6 parts, the USA 13 and India 16. All
-  198 countries come to 269 MB (412 MB before whole people, which compress better).
+  233 countries come to 373 MB (198 were 412 MB before whole people, which compress better).
 - **Names.** Pack files are named by content hash and never change, so hosts and browsers
   can cache them forever.
 
@@ -123,7 +131,7 @@ In static mode, `web/static.js`:
 4. if a part cannot be downloaded, says "At least N" and names the missing country rather
    than undercounting quietly.
 
-The page greys out land it has no data for (`build_static.no_data`, from Natural Earth
+The page grays out land it has no data for (`build_static.no_data`, from Natural Earth
 minus the built countries' outlines). The **Country** tab sums a country's own packs at
 one level, with no outline or polyfill.
 
@@ -135,9 +143,9 @@ went black and nothing said why. The app now says "Tally has been updated. Reloa
 latest." when an answer is missing a field it needs. The service worker never caches packs
 (they live in IndexedDB) or tiles.
 
-**A tab left open across a release** (F-31). A page keeps the scripts and catalogue it
+**A tab left open across a release** (F-31). A page keeps the scripts and catalog it
 loaded, and a deploy that rebuilds a country renames its pack files. So a 404 on a pack
-makes `static.js` read the catalogue again and run the query once more, and the panel says
+makes `static.js` read the catalog again and run the query once more, and the panel says
 "A new version of Tally is available." with a Reload button when the data changed or a
 newer service worker took over (the page asks the worker its version: `sw.js` answers
 "version"). It looks for a new worker when the tab comes back into view and hourly. Reload
@@ -166,10 +174,10 @@ These are easy to break and hard to notice:
 
 | Decision | Why |
 | --- | --- |
-| H3, assigned by cell centre | Hierarchical, so one roll-up serves every zoom; the centre rule makes shapes partition cleanly |
+| H3, assigned by cell center | Hierarchical, so one roll-up serves every zoom; the center rule makes shapes partition cleanly |
 | Base resolution 9 | About 0.1 km², several source pixels per cell (30 m and 100 m data alike) |
 | Clip at ingest, not at query | Each person belongs to exactly one country, so summing countries is always safe |
-| geoBoundaries for outlines | CC BY 4.0; GADM's licence restricts redistribution and commercial use |
+| geoBoundaries for outlines | CC BY 4.0; GADM's license restricts redistribution and commercial use |
 | Overlaps split along CGAZ | Keeps each country's detailed outline; only the strips two outlines share change hands |
 | Static packs, no server | Nothing to run but a web server, works offline, and nothing a visitor draws leaves the browser |
 | One pack per country, split by region | A first count downloads only the region it needs, and every file stays small |

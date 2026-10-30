@@ -23,7 +23,7 @@
       "terra-draw.umd.js": "c0ffb13814d97563743dc231679320fc310972d1d789495c257c19d709dc4968",
       "LICENSE": "78f5dfcbb9d43a76b4919d79dbd23381bb9cb48b4b40e49c050bbc175e3e7e28"
     },
-    "licence_from": "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
+    "license_from": "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
   },
   "terra-draw-maplibre-gl-adapter@1.4.1": {
     "version": "1.4.1",
@@ -32,7 +32,7 @@
       "terra-draw-maplibre-gl-adapter.umd.js": "8911c43a17620b589585bd600c13f60b2404ef5b0b1fb1125240e2f91c43db83",
       "LICENSE": "78f5dfcbb9d43a76b4919d79dbd23381bb9cb48b4b40e49c050bbc175e3e7e28"
     },
-    "licence_from": "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
+    "license_from": "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
   },
   "@fontsource/barlow@5.3.0": {
     "version": "5.3.0",

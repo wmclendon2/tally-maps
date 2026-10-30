@@ -28,7 +28,7 @@ def test_vendored_files_match_the_manifest():
             )
 
 
-def test_every_vendored_package_ships_a_licence():
+def test_every_vendored_package_ships_a_license():
     for pkg, record in MANIFEST.items():
         assert any(n.upper().startswith("LICENSE") for n in record["files"]), pkg
 

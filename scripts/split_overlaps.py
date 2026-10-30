@@ -8,7 +8,9 @@
 Where two countries' outlines overlap, both packs would count the people there. The rule
 is in ingest/overlaps.py: the overlap is split along geoBoundaries CGAZ's border, and the
 rest (in neither side's CGAZ unit, or all of it when CGAZ has no unit for a side) goes to
-the side whose raster holds more people there, ties to the lower ISO3 code. This finds the
+the side whose raster holds more people there, ties to the lower ISO3 code. A pair whose
+rasters each hold only their own people (two WorldPop countries) is not cut: both keep
+the overlap ("kept_by_both"). This finds the
 overlapping pairs, reads both rasters inside each rest (with the build's rule, as
 scripts/audit_overlaps.py does) and writes the decisions to reference/overlap_split.json,
 which is checked in: a build needs only the outlines, CGAZ and that file.
@@ -42,13 +44,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from audit_overlaps import built_countries, overlaps, rasters_for, read_people
 
-from ingest.boundaries import area_km2, clip_base, outline_shape
+from ingest.boundaries import CLIP_GROW_DEG, area_km2, clip_base, fetch_boundary, outline_shape
 from ingest.overlaps import (
     CGAZ_SHA256,
     CGAZ_URL,
+    CLIP_DIR,
+    EMPTY,
     SPLIT_PATH,
     cgaz_units,
     clip_path,
+    kept_by_both,
     load_split,
     overlap_of,
     pairs_of,
@@ -96,6 +101,17 @@ def check_pair(pair: dict, outline, clip, thirds: list[str] = ()) -> tuple[float
     return sliver_km2(both), sliver_km2(polygonal(overlap.difference(kept)))
 
 
+def built_key(iso3: str) -> str | None:
+    """The key of the clip iso3's pack was last cut to, if not its plain outline."""
+    path = CLIP_DIR / f"{iso3}_ADM0.geojson"
+    return json.loads(path.read_text()).get("tally", {}).get("split") if path.exists() else None
+
+
+def wanted_key(iso3: str, split: dict) -> str | None:
+    """The key of the clip iso3 is cut to now; None for its plain outline (clip_path)."""
+    return split_key(iso3, split) if pairs_of(iso3, split) or iso3 in CLIP_GROW_DEG else None
+
+
 def write_split(split: dict, path: Path = SPLIT_PATH) -> None:
     """One pair a line, so a rerun's diff shows which pairs changed."""
     lines = [f" {json.dumps(k)}: {json.dumps(v)}" for k, v in split.items() if k != "pairs"]
@@ -134,35 +150,38 @@ def main(
     with console.status("Splitting overlaps along CGAZ"):
         overlap = {p: overlap_of(outlines[p[0]], outlines[p[1]]) for p in found}
         found = [p for p in found if not overlap[p].is_empty]
-        rest = {p: rest_of(overlap[p], units.get(p[0]), units.get(p[1])) for p in found}
+        uncut = {p for p in found if kept_by_both(*p)}
+        rest = {
+            p: EMPTY if p in uncut else rest_of(overlap[p], units.get(p[0]), units.get(p[1]))
+            for p in found
+        }
     # A rest the file already holds, unchanged, keeps its decision: its rasters are not
-    # read again (taking in one new country reads only its neighbours').
+    # read again (taking in one new country reads only its neighbors').
     known = {}
     if old and old["cgaz"]["sha256"] == CGAZ_SHA256:
         known = {(q["a"], q["b"]): q for q in old["pairs"]}
     kept = {p for p in found if p in known and known[p]["rest_km2"] == round(km2(rest[p]), 3)}
     to_read = {p: g for p, g in rest.items() if not g.is_empty and p not in kept}
     rasters = {iso3: rasters_for(iso3) for p in to_read for iso3 in p}
-    people = read_people(to_read, rasters, workers, t0)
+    people, _ = read_people(to_read, rasters, workers, t0)
     console.print(f"{len(to_read)} rests read, {len(kept)} kept from {SPLIT_PATH.name}")
 
     pairs = []
     for p in found:
         a, b = p
-        q = known[p] if p in kept else None
-        pairs.append(
-            {
-                "a": a,
-                "b": b,
-                "overlap_km2": round(km2(overlap[p]), 3),
-                "cgaz_units": [a in units, b in units],
-                "rest_km2": round(km2(rest[p]), 3),
-                "rest_people": q["rest_people"]
-                if q
-                else [round(people.get((a, b, k)) or 0.0, 1) for k in p],
-                "rest_to": q["rest_to"] if q else decide(p, people),
-            }
-        )
+        q = known[p] if p in kept and not known[p].get("kept_by_both") else None
+        row = {
+            "a": a,
+            "b": b,
+            "overlap_km2": round(km2(overlap[p]), 3),
+            "cgaz_units": [a in units, b in units],
+            "rest_km2": round(km2(rest[p]), 3),
+            "rest_people": q["rest_people"]
+            if q
+            else [round(people.get((a, b, k)) or 0.0, 1) for k in p],
+            "rest_to": None if p in uncut else q["rest_to"] if q else decide(p, people),
+        }
+        pairs.append({**row, "kept_by_both": True} if p in uncut else row)
     split = {
         "about": "Who keeps the rest of each outline overlap (F-30): see ingest/overlaps.py. "
         "Written by scripts/split_overlaps.py.",
@@ -173,6 +192,7 @@ def main(
     write_split(split)
     console.print(f"Wrote {SPLIT_PATH} in {time.time() - t0:.0f} s")
 
+    before = {c: built_key(c) for c in codes}
     involved = sorted({c for p in pairs for c in (p["a"], p["b"])})
     with ProcessPoolExecutor(max_workers=workers) as pool:
         paths = dict(zip(involved, pool.map(clip_path, involved, [split] * len(involved))))
@@ -190,6 +210,8 @@ def main(
     for p in pairs:
         thirds = sorted(partners[p["a"]] & partners[p["b"]])
         both, lost = check_pair(p, outlines.__getitem__, clips.__getitem__, thirds)
+        if p.get("kept_by_both"):
+            both = 0.0  # both clips keep the overlap by design
         failed = both > SLIVER_KM2 or lost > SLIVER_KM2
         if failed:
             bad.append(f"{p['a']}–{p['b']}: clips share {both:.6f} km², drop {lost:.6f} km²")
@@ -200,22 +222,22 @@ def main(
                 f"{p['rest_km2']:,.2f}",
                 f"{p['rest_people'][0]:,.0f}",
                 f"{p['rest_people'][1]:,.0f}",
-                p["rest_to"],
+                p["rest_to"] or "both",
             )
     console.print(table)
-    given = {iso3: km2(polygonal(outlines[iso3].difference(clips[iso3]))) for iso3 in involved}
+    # Measured against the plain outline: a grown one reaches into its neighbors' land.
+    plain = {
+        c: outline_shape(fetch_boundary(c)) if c in CLIP_GROW_DEG else outlines[c] for c in involved
+    }
+    given = {c: km2(polygonal(plain[c].difference(clips[c]))) for c in involved}
     console.print(
         f"{len(pairs)} pairs; {sum(given.values()):,.0f} km² given away in all, most by "
         + ", ".join(f"{k} {v:,.0f}" for k, v in sorted(given.items(), key=lambda kv: -kv[1])[:5])
     )
-    # A clip changes when its pairs do; one that gives nothing away now and had no pairs
-    # before is its outline, so its pack is unchanged.
-    changed = [
-        c
-        for c in codes
-        if (given.get(c, 0.0) > 0 or (old and pairs_of(c, old)))
-        and (old is None or split_key(c, old) != split_key(c, split))
-    ]
+    # A clip changes when its pairs or how it or a neighbor is grown do (its key), or
+    # when it becomes, or stops being, the plain outline. Compared with the clip on disk,
+    # which the last build of the pack, or of this file, cut.
+    changed = [c for c in codes if before[c] != wanted_key(c, split)]
     built = set(built_countries())
     rebuild = [c for c in changed if c in built]
     if rebuild:

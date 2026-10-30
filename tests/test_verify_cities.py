@@ -29,7 +29,7 @@ CITY = City("Testville", "XXX", 4.0, 9.7, 1_000_000)
 
 
 def synth_cells(blob_lat, blob_lng, *, box_lat=CITY.lat, box_lng=CITY.lng, radius_km=25.0):
-    """A dense blob on a thin rural background, inside a box centred on the city point."""
+    """A dense blob on a thin rural background, inside a box centered on the city point."""
     cells = h3.geo_to_cells(city_box(box_lat, box_lng, radius_km), RES)
     out = []
     for c in cells:
@@ -143,7 +143,7 @@ def test_checked_in_reference_is_usable():
 
 
 def test_natural_earth_codes_are_mapped_to_iso3(tmp_path):
-    """Somaliland and Western Sahara are filed under the recognised state's ISO3."""
+    """Somaliland and Western Sahara are filed under the recognized state's ISO3."""
     path = tmp_path / "cities.json"
     path.write_text(
         json.dumps(

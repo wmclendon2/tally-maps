@@ -1,12 +1,12 @@
 # Copyright (c) 2026 Woody McLendon
 # SPDX-License-Identifier: MIT
-"""Meta's High Resolution Population Density Maps on HDX: the catalogue and downloads.
+"""Meta's High Resolution Population Density Maps on HDX: the catalog and downloads.
 
 Finds each country's general-population GeoTIFF through HDX's CKAN API (no key needed) and
 downloads it to data/raw/meta/<ISO3>/. scripts/build_packs.py calls this for any country
 whose raster is not here yet. Part-downloaded zips resume.
 
-    # every country in Meta's catalogue, with its data year and download size
+    # every country in Meta's catalog, with its data year and download size
     uv run python -m ingest.hdx
 """
 
@@ -75,7 +75,7 @@ class Candidate:
 def fetch_catalog(rows: int = 200) -> list[dict]:
     """All Meta HRSL datasets on HDX, as raw CKAN package dicts.
 
-    Paged large deliberately: with rows=25 the catalogue came back with 195, 196 or 197
+    Paged large deliberately: with rows=25 the catalog came back with 195, 196 or 197
     datasets on consecutive runs, because CKAN's result ordering can shift between page
     requests. One or two pages is both steadier and quicker.
     """
@@ -196,9 +196,9 @@ def fetch_country(cand: Candidate, *, progress=None) -> list[Path]:
 
 @app.command()
 def main() -> None:
-    """Print Meta's catalogue on HDX: every country, its data year and download size."""
+    """Print Meta's catalog on HDX: every country, its data year and download size."""
     cands = candidates()
-    table = Table(title=f"HDX Meta HRSL catalogue: {len(cands)} countries")
+    table = Table(title=f"HDX Meta HRSL catalog: {len(cands)} countries")
     table.add_column("ISO3")
     table.add_column("year")
     table.add_column("size MB", justify="right")
