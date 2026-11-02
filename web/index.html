@@ -33,7 +33,7 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=49">
+  <link rel="stylesheet" href="style.css?v=55">
 </head>
 <body>
   <div id="map"></div>
@@ -160,11 +160,18 @@
         </div>
         <span id="detail-note" class="detail-note" hidden></span>
       </div>
-      <div class="result-actions">
-        <button id="export" class="ghost small" title="Save a picture of this map and count">
+      <!-- F-04: the count as a picture, a spreadsheet row or map data, all made here. -->
+      <div class="result-actions" role="group" aria-labelledby="save-label">
+        <!-- One icon on the label, not one per button: four in a row overflow the panel. -->
+        <span class="tools-label save-label" id="save-label">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v9.6l3.3-3.3 1.4 1.4L10 14.4 5.3 9.7l1.4-1.4L10 11.6V2zM3 15h14v2H3z"/></svg>
-          Save image
-        </button>
+          Save
+        </span>
+        <button id="export" class="ghost small" title="Save a picture of this map and count">Image</button>
+        <button id="export-csv" class="ghost small"
+                title="Save the count as a spreadsheet row (CSV): people, area, density, data source">CSV</button>
+        <button id="export-geojson" class="ghost small"
+                title="Save the shape and every hexagon with its people (GeoJSON), for QGIS and other map tools">GeoJSON</button>
       </div>
       <dl class="meta" id="debug" hidden>
         <dt>Source</dt><dd id="source"></dd>
@@ -295,7 +302,7 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=49"></script>
-  <script src="app.js?v=49"></script>
+  <script src="static.js?v=55"></script>
+  <script src="app.js?v=55"></script>
 </body>
 </html>

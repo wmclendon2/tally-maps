@@ -101,6 +101,41 @@ function cellsBounds(cells) {
   ];
 }
 
+// Where a country's people are, for framing it: the cells nearest its people-weighted
+// middle that hold FRAME_SHARE of them. Framing every cell let a far island set the view
+// (Rotuma, 460 km north with 0.2% of Fiji, pushed the main islands to the bottom; Easter
+// Island, Alaska and Hawaii do the same). The far cells are still counted and drawn.
+const FRAME_SHARE = 0.99;
+function peopleBounds(cells) {
+  if (!cells.length) return null;
+  const pts = cells.map((c) => h3.cellToLatLng(c.h3));
+  const lngs = pts.map((p) => p[1]);
+  // The same unwrapping as cellsBounds, so an island across 180 degrees is near, not far.
+  const wrap = Math.max(...lngs) - Math.min(...lngs) > 180;
+  const lng = (x) => (wrap && x < 0 ? x + 360 : x);
+  let total = 0, mx = 0, my = 0;
+  cells.forEach((c, i) => {
+    total += c.population;
+    mx += lng(pts[i][1]) * c.population;
+    my += pts[i][0] * c.population;
+  });
+  if (!(total > 0)) return cellsBounds(cells);
+  mx /= total;
+  my /= total;
+  const kx = Math.cos((my * Math.PI) / 180);
+  const order = cells
+    .map((c, i) => ({ c, d: ((lng(pts[i][1]) - mx) * kx) ** 2 + (pts[i][0] - my) ** 2 }))
+    .sort((a, b) => a.d - b.d);
+  const kept = [];
+  let sum = 0;
+  for (const { c } of order) {
+    kept.push(c);
+    sum += c.population;
+    if (sum >= total * FRAME_SHARE) break;
+  }
+  return cellsBounds(kept);
+}
+
 // fitBounds padding that keeps the framed area clear of the panel: beside it on a wide
 // screen, a sheet at the bottom on a phone. The sheet with a count on it is taller than
 // half a phone screen, so it pads by the sheet's real height, leaving MIN_MAP_PX of map
@@ -1266,7 +1301,7 @@ function queryCountry(iso3, { frame = false, fresh = frame } = {}) {
   lastGeometry = null;
   lastLabel = null;
   $("country-pick").value = iso3;
-  const bounds = (body) => (body.cells.length ? cellsBounds(body.cells) : null);
+  const bounds = (body) => (body.cells.length ? peopleBounds(body.cells) : null);
   return runQuery(() => countryQuery(iso3), { frame: frame ? bounds : null, fresh, maxZoom: 11 });
 }
 
@@ -1428,6 +1463,43 @@ function buildCellFeatures(res) {
   };
 }
 
+// The zoom at which fitBounds puts `box` in a width x height map with `pad` px round it
+// (Web Mercator, 512 px tiles), without making a map to ask.
+const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+function fitZoom([[w, s], [e, n]], width, height, pad) {
+  const dx = Math.max((e - w) / 360, 1e-9);
+  const dy = Math.max((mercY(n) - mercY(s)) / (2 * Math.PI), 1e-9);
+  return Math.log2(Math.min((width - 2 * pad) / (512 * dx), (height - 2 * pad) / (512 * dy)));
+}
+const INSET_ZOOM_OUT = 2.5;
+
+// How wide (CSS px) a hexagon at level `r` is in the middle of map `m`.
+function hexWidthPx(m, r) {
+  const { lng, lat } = m.getCenter();
+  const xs = hexRing(h3.latLngToCell(lat, lng, r)).map((p) => m.project(p).x);
+  return Math.max(...xs) - Math.min(...xs);
+}
+
+// The image keeps the detail level picked (Fine stays Fine). Small hexagons lose their
+// borders instead (OUTLINE_MIN_PX): at ~2 px a hexagon, as for a whole country at Fine,
+// the gray border covered most of each one and the heatmap read as dark noise. Only
+// hexagons too small to see at all (under MIN_HEX_PX) merge into their parents, which
+// keeps every person, so totals stand.
+const OUTLINE_MIN_PX = 6;
+const MIN_HEX_PX = 1.5;
+function cellsForScale(m, cells, resolution) {
+  let r = resolution;
+  while (r > 0 && hexWidthPx(m, r) < MIN_HEX_PX) r--;
+  if (r === resolution) return { cells, outlined: hexWidthPx(m, r) >= OUTLINE_MIN_PX };
+  const sums = new Map();
+  for (const c of cells) {
+    const p = h3.cellToParent(c.h3, r);
+    sums.set(p, (sums.get(p) ?? 0) + c.population);
+  }
+  const merged = [...sums].map(([h, population]) => ({ h3: h, population }));
+  return { cells: merged, outlined: hexWidthPx(m, r) >= OUTLINE_MIN_PX };
+}
+
 // Render a throwaway MapLibre map off-screen and resolve with a copy of its canvas.
 function renderMap({ width, height, setup }) {
   return new Promise((resolve, reject) => {
@@ -1500,48 +1572,60 @@ async function exportImage() {
     const cells = buildCellFeatures(res);
     // A whole country has no drawn outline: its hexagons stand in for one.
     const outline = geometry ? { type: "Feature", properties: {}, geometry } : cells;
+    // The inset shows all of it; the main map frames where the people are, as the live
+    // map does (peopleBounds).
     const bbox = geometry ? bboxOf(geometry) : cellsBounds(res.cells);
+    const detailBox = geometry ? bbox : peopleBounds(res.cells);
     const center = [(bbox[0][0] + bbox[1][0]) / 2, (bbox[0][1] + bbox[1][1]) / 2];
 
+    // tolerance 0 on every source, as on the live map: by default MapLibre drops shapes
+    // under about a pixel.
     const DW = 1000, DH = 800, OW = 480, OH = 480;
     const [detailMap, overviewMap] = await Promise.all([
       renderMap({
         width: DW,
         height: DH,
         setup: (m) => {
+          m.fitBounds(detailBox, { padding: 90, duration: 0, maxZoom: 15 });
           const firstSymbol = m.getStyle().layers.find((l) => l.type === "symbol")?.id;
-          m.addSource("cells", { type: "geojson", data: cells });
+          const { cells: shown, outlined } = cellsForScale(m, res.cells, res.resolution);
+          m.addSource("cells", { type: "geojson", data: buildCellFeatures({ cells: shown }), tolerance: 0 });
           m.addLayer(
             { id: "cells-fill", type: "fill", source: "cells",
               paint: { "fill-color": ["get", "color"], "fill-opacity": 0.7 } },
             firstSymbol,
           );
-          m.addLayer(
-            { id: "cells-line", type: "line", source: "cells",
-              paint: { "line-color": "#00000033", "line-width": 0.5 } },
-            firstSymbol,
-          );
+          if (outlined)
+            m.addLayer(
+              { id: "cells-line", type: "line", source: "cells",
+                paint: { "line-color": "#00000033", "line-width": 0.5 } },
+              firstSymbol,
+            );
           if (geometry) {
-            m.addSource("outline", { type: "geojson", data: outline });
+            m.addSource("outline", { type: "geojson", data: outline, tolerance: 0 });
             m.addLayer({ id: "outline", type: "line", source: "outline",
               paint: { "line-color": "#1f6feb", "line-width": 3 } });
           }
-          m.fitBounds(bbox, { padding: 90, duration: 0, maxZoom: 15 });
         },
       }),
       renderMap({
         width: OW,
         height: OH,
         setup: (m) => {
-          m.addSource("outline", { type: "geojson", data: outline });
+          m.addSource("outline", { type: "geojson", data: outline, tolerance: 0 });
+          // The heatmap's crimson (as the count and the pin), not the drawn shape's blue:
+          // a whole country, with no blue on the main map, read as unconnected to it.
           m.addLayer({ id: "outline-fill", type: "fill", source: "outline",
-            paint: { "fill-color": "#1f6feb", "fill-opacity": 0.45 } });
+            paint: { "fill-color": "#ce1256", "fill-opacity": 0.45 } });
           m.addLayer({ id: "outline-line", type: "line", source: "outline",
-            paint: { "line-color": "#1f6feb", "line-width": 2 } });
-          // A country can be bigger than this view: then show all of it, a little wider.
-          m.jumpTo({ center, zoom: 4.6 });
-          const fit = m.cameraForBounds(bbox, { padding: 40 });
-          if (fit && fit.zoom < 4.6) m.jumpTo({ center: fit.center, zoom: Math.max(0, fit.zoom - 1) });
+            paint: { "line-color": "#980043", "line-width": 2 } });
+          // Always INSET_ZOOM_OUT levels further out than the main map (~5.7x wider), so a
+          // country sits in its region; a fixed zoom, widened only when the area did not
+          // fit, showed a country at about the main map's own scale. Never closer than 4.6,
+          // so a small shape still shows where in the world it is.
+          const mainZoom = Math.min(15, fitZoom(detailBox, DW, DH, 90));
+          const mid = [(detailBox[0][0] + detailBox[1][0]) / 2, (detailBox[0][1] + detailBox[1][1]) / 2];
+          m.jumpTo({ center: mid, zoom: Math.max(0, Math.min(4.6, mainZoom - INSET_ZOOM_OUT)) });
           // At this zoom a pixel is ~6.5 km, so a city-sized polygon is a speck. Pin it
           // only then: on a shape big enough to see, a dot in the middle reads as marking
           // something inside the area.
@@ -1616,25 +1700,116 @@ async function exportImage() {
     );
 
     const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-    const file = new File([blob], `tally-${stamp}.png`, { type: "image/png" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    setStatus(`Exported ${file.name}`);
+    setStatus(`Saved ${saveFile(blob, "png")}`);
   } catch (err) {
-    setStatus(`Export failed: ${err.message}`, true);
+    setStatus(`Could not save the image: ${err.message}`, true);
   } finally {
     btn.disabled = false;
   }
 }
 
+// Hand the visitor a file made here: nothing is uploaded. Returns the file's name.
+function saveFile(blob, ext) {
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const name = `tally-${stamp}.${ext}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return name;
+}
+
+// ---- data export (F-04) --------------------------------------------------------
+// Files are for other tools, so they hold plain machine-readable values: km² and mi²
+// both, whole people, ISO dates. Names still say "estimate", as every count on screen does.
+
+const round = (x, places) => Math.round(x * 10 ** places) / 10 ** places;
+
+// What was counted, in the same words as the panel and the image.
+function exportSummary(res) {
+  const kind = res.country ? "country" : lastLabel ? "circle" : "shape";
+  const name = res.country
+    ? res.country.name
+    : lastLabel
+      ? `Population ${lastLabel()}`
+      : "Population inside a drawn shape";
+  const year = res.country ? String(res.country.data_version ?? "").slice(0, 4) : "";
+  return {
+    name,
+    kind,
+    country_iso3: res.country?.iso3 ?? "",
+    population_estimate: Math.round(res.total),
+    area_km2: round(res.areaKm2, 3),
+    area_mi2: round(res.areaKm2 / UNITS.imperial.km2, 3),
+    density_per_km2: round(res.density, 1),
+    density_per_mi2: round(res.density * UNITS.imperial.km2, 1),
+    // A total that leaves a country out is a floor: the file says so, as the panel does.
+    left_out: (res.missing ?? []).join("; "),
+    source: sourceKeys(res.source).map((k) => SOURCE_NAMES[k]).join(" and ") || res.source,
+    data_year: year,
+    h3_resolution: res.resolution,
+    hexagons: res.populated_cells,
+    counted_at: new Date().toISOString(),
+    counted_with: "tallymaps.org",
+  };
+}
+
+// RFC 4180: quote a field that holds a comma, quote or line break; double its quotes.
+const csvField = (v) => {
+  const s = String(v ?? "");
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+function exportCsv() {
+  if (!lastResult) return;
+  const row = exportSummary(lastResult);
+  const lines = [Object.keys(row), Object.values(row)].map((r) => r.map(csvField).join(","));
+  // The byte-order mark makes Excel read the file as UTF-8 (Côte d'Ivoire, km²).
+  const blob = new Blob(["﻿" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
+  setStatus(`Saved ${saveFile(blob, "csv")}`);
+}
+
+// ~10 cm: enough for any hexagon or drawn vertex, and it keeps 40,000 cells to a few MB.
+const roundCoords = (c) => (typeof c[0] === "number" ? c.map((x) => round(x, 6)) : c.map(roundCoords));
+
+// One FeatureCollection: every populated hexagon (`kind: "hexagon"`, its H3 index and its
+// people), then the shape with the summary (`kind` "shape" or "circle"). The shape comes
+// last so map tools draw it on top. A whole country has no drawn outline: its feature
+// carries the summary with no geometry, which GeoJSON allows (RFC 7946, 3.2).
+function exportGeojson() {
+  if (!lastResult) return;
+  const res = lastResult;
+  // `population` on every feature, the property F-02's upload will read back.
+  const { population_estimate: population, ...summary } = exportSummary(res);
+  const hexagons = res.cells.map((c) => ({
+    type: "Feature",
+    properties: {
+      kind: "hexagon",
+      h3: c.h3,
+      population: Math.round(c.population),
+      density_per_km2: round(cellDensity(c), 1),
+    },
+    geometry: { type: "Polygon", coordinates: roundCoords([hexRing(c.h3)]) },
+  }));
+  const shape = {
+    type: "Feature",
+    properties: { name: summary.name, kind: summary.kind, population, ...summary },
+    geometry: lastGeometry && !res.country
+      ? { type: lastGeometry.type, coordinates: roundCoords(lastGeometry.coordinates) }
+      : null,
+  };
+  const text = JSON.stringify({ type: "FeatureCollection", features: [...hexagons, shape] });
+  const blob = new Blob([text], { type: "application/geo+json" });
+  setStatus(`Saved ${saveFile(blob, "geojson")}`);
+}
+
 $("export").addEventListener("click", exportImage);
+$("export-csv").addEventListener("click", exportCsv);
+$("export-geojson").addEventListener("click", exportGeojson);
 
 // Last, once everything it touches exists: labels, radius box and scale in the saved units.
 setUnits(units);

@@ -20,7 +20,6 @@ but it is a deliberate choice.
 | --- | --- | --- | --- | --- | --- | --- |
 | F-01 | Multi-lingual interface | Shaped | M | ★★★ | ✅ | — |
 | F-02 | Upload polygons (SHP/GeoJSON/KML/GPKG), batch results | Shaped | M–L | ★★★ | ✅ | — |
-| F-04 | Export results (CSV / GeoJSON) | Inbox | S | ★★ | ✅ | — |
 | F-05 | Shareable link to a shape (in the URL fragment) | Inbox | S | ★★ | ✅ | — |
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
 | F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Parked | L | ★★★ | ✅ | Pack format minor bump |
@@ -39,6 +38,7 @@ but it is a deliberate choice.
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 | F-35 | Detail limits: measure the cost and accuracy of more cells | Inbox | S (M if it leads to a change) | ★★ | ✅ | After F-34 |
 | F-36 | WorldPop everywhere: one source for every country | Inbox (for a future decision) | M–L | ★★ | ✅ | F-32 |
+| F-37 | People across the 180° line: check every country and repair | Inbox | S–M | ★★ | ✅ | — |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
@@ -349,10 +349,31 @@ Candidates still open:
   requests to the host's counts, but no page view (the hosted site's analytics count page
   loads only). The kept shape stays in that tab's `sessionStorage`, on the device.
 
+### F-04 Export results: CSV and GeoJSON
+- **Why:** a count could leave Tally only as a picture (Save image, 2026-09-18). People who
+  want the numbers in a spreadsheet or the hexagons in QGIS had no way to get them.
+- **Shipped 2026-11-01 (shell v55):** a **Save** row under the count: Image, CSV and
+  GeoJSON, all made in the browser (nothing is uploaded).
+  - **CSV:** one row for the count: name, kind (shape, circle or country), country code,
+    `population_estimate`, area and density in km² and mi², countries left out when a
+    download failed, source, data year (countries), H3 level, hexagons, time counted.
+    UTF-8 with a byte-order mark, so Excel reads accents; RFC 4180 quoting.
+  - **GeoJSON:** every populated hexagon (`kind: "hexagon"`, `h3`, `population`, density),
+    then the shape with the same summary, last so map tools draw it on top. A whole
+    country's feature has no geometry (RFC 7946 allows it). `population` is the property
+    F-02's upload will read back. Coordinates to 6 decimals; hexagons across 180° keep
+    longitudes past 180, as on the map.
+- **Found on the way (fixed):** a country is framed on the cells nearest its people-weighted
+  middle that hold 99% of its people (`peopleBounds`; Rotuma, 0.2% of Fiji, had pushed the
+  main islands to the bottom of the view). The image: `tolerance: 0` on its sources, as on
+  the live map (a country at Fine was not drawn at all); hexagons under 6 px wide lose
+  their gray borders (at ~2 px the heatmap read as dark noise), and Fine stays Fine; the
+  inset is always 2.5 zoom levels further out than the main map (at most 4.6), so a country
+  sits in its region, and fills the counted area in the heatmap's crimson, not the drawn
+  shape's blue. Fiji's missing people east of 180° became F-37.
+
 ## Notes on Inbox items
 
-- **F-04:** PNG export (Save image) shipped 2026-09-18; this item is the data formats,
-  CSV and GeoJSON, beside it.
 - **F-06:** needs ADM1/ADM2 outlines from geoBoundaries (same license) as a light vector
   layer per country; clicking an area runs the normal shape query on its outline. Whole
   countries already work through the Country tab.
@@ -440,6 +461,19 @@ Candidates still open:
   people who noted one), disputed areas follow LSIB everywhere (as CGAZ does today), and
   the checks and docs redone. Decide after F-32's comparison. Effort: M–L, mostly machine
   time (downloads and a full rebuild).
+- **F-37:** found 2026-11-01 while building F-04: Fiji's pack has no one east of 180°.
+  Meta's FJI raster runs 176.9° to 181.8° E, so it writes Taveuni's east side and the
+  Lau islands as longitudes past 180; the geoBoundaries outline it is clipped to writes
+  the same land as -180 to -179. The two never meet, so the clip drops 14,776 people
+  (860,594 of the raster's people lie west of 180; the pack holds 853,556). On the map
+  those islands are bare land. (1) Check: list every country whose raster, outline or
+  clip touches 180° (Fiji, New Zealand's Chatham Islands, the USA's Aleutians, Kiribati,
+  Russia's Chukotka; Tuvalu, Tonga and Wallis and Futuna sit near it) and compare the
+  raster's people either side of 180 with the pack. (2) Repair: unwrap the clip (or
+  the raster) onto one side of 180 before clipping, for Meta's past-180 grids and
+  WorldPop's alike; the overlap split, the no-data mask and `audit_overlaps.py` need the
+  same care. (3) A test with a cell either side of 180, then rebuild the countries hit and
+  the overlap step for their neighbors. Effort: S to check, M with the rebuilds.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
@@ -478,3 +512,4 @@ Candidates still open:
 | F-30 | Outline overlaps split along CGAZ: no one counted in two countries (1.67 M were) | 2026-10-20 |
 | F-31 | A tab left open survives a release: "new version" notice, retry on a renamed pack, the count kept across Reload | 2026-10-20 |
 | F-10 | WorldPop 100 m for the other 35 places Meta lacks (233 countries and territories); disputed borders through the overlap split | 2026-10-30 |
+| F-04 | Export results as CSV and GeoJSON; countries framed on their people; clearer saved images | 2026-11-01 |
