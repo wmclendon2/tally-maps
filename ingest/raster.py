@@ -92,6 +92,25 @@ def pixels_to_cells(lats: np.ndarray, lngs: np.ndarray, resolution: int) -> np.n
     return out
 
 
+def clip_for_grid(clip: list[dict], left: float, right: float) -> list[dict]:
+    """`clip` as seen from a raster whose longitudes run from `left` to `right`.
+
+    Outlines write longitudes from -180 to 180, but a grid may run past either end: Meta's
+    Fiji, Kiribati and New Zealand files go east to 181.8, 202.8 and 183.8, so the land
+    east of 180 is at -180..-179 in the outline and 180..181 in the grid, and a clip
+    against the outline alone drops everyone there (F-37: Fiji 14,776). Where the grid
+    runs past an end, the outline is added again moved by 360 degrees to meet it.
+    """
+    from shapely.affinity import translate
+    from shapely.geometry import mapping, shape
+
+    out = list(clip)
+    for past, dx in ((right > 180, 360.0), (left < -180, -360.0)):
+        if past:
+            out += [mapping(translate(shape(g), xoff=dx)) for g in clip]
+    return out
+
+
 def raster_to_h3(
     path: str | Path,
     resolution: int,
@@ -107,7 +126,8 @@ def raster_to_h3(
     WorldPop and Meta HRSL products are. Pixel centers are computed from the
     geotransform, never stored. `clip` is a list of GeoJSON-like geometries in
     the same CRS; pixels whose center falls outside all of them are dropped and
-    counted in stats.pixels_clipped / stats.clipped_total.
+    counted in stats.pixels_clipped / stats.clipped_total. A grid that runs past 180
+    degrees is clipped against the outline moved to meet it (clip_for_grid).
 
     `read_order` is "auto" (file order only when a stripped file stores its strips out of
     row order), "row" or "file"; see the module docstring. It never changes the result.
@@ -129,6 +149,8 @@ def raster_to_h3(
             nodata=ds.nodata,
             bounds=tuple(ds.bounds),
         )
+        if clip is not None:
+            clip = clip_for_grid(clip, ds.bounds.left, ds.bounds.right)
         t = ds.transform
         nodata = ds.nodata
         offsets = strip_offsets(ds) if read_order != "row" else None

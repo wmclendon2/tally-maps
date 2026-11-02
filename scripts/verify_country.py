@@ -25,8 +25,8 @@ honest measure of how much the hex grid distorts a border at this resolution. It
 checks that every pyramid level sums to the same total, that the total matches the
 catalog, and each part's hashes, header, footprint and totals.
 
-Outlines that cross the antimeridian (FJI, KIR, NZL) are refused: their lon/lat bounding
-box spans nearly the whole globe.
+Outlines split at the antimeridian (FJI, KIR, NZL: pieces up to 180 and from -180) are
+covered piece by piece; an outline with one piece across it is refused.
 """
 
 from __future__ import annotations
@@ -216,12 +216,15 @@ def main(
         raise typer.BadParameter(f"resolution must be in [{MIN_RESOLUTION}, {base}]")
 
     geom = load_outline(iso3)
-    minx, _, maxx, _ = geom.bounds
-    if maxx - minx > 180:
-        raise typer.BadParameter(
-            f"{iso3} spans {maxx - minx:.0f} deg of longitude; it likely crosses the "
-            "antimeridian, which this check cannot handle"
-        )
+    # An outline split at 180 degrees (Fiji, Kiribati, New Zealand: pieces up to 180 and
+    # from -180) covers piece by piece, as h3 does; only one piece across it cannot.
+    for part in getattr(geom, "geoms", [geom]):
+        minx, _, maxx, _ = part.bounds
+        if maxx - minx > 180:
+            raise typer.BadParameter(
+                f"{iso3} has a piece spanning {maxx - minx:.0f} deg of longitude; it likely "
+                "crosses the antimeridian unsplit, which this check cannot handle"
+            )
     console.print(f"{iso3}: outline {geom.geom_type}, bounds {[round(b, 3) for b in geom.bounds]}")
     console.print(f"covering at res {res}...")
     cells = set(h3.geo_to_cells(geom, res))

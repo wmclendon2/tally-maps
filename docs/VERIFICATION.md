@@ -40,8 +40,10 @@ that every pyramid level sums to the same total, and that the total matches the 
 - Small islands show a large "net border error" at resolution 7 (Seychelles −26%, Mayotte
   −24%, Comoros −14%, Cape Verde −10%) because coarse cell centers fall in the sea. The
   identity still balances.
-- Outlines that cross the 180° meridian (Fiji, Kiribati, New Zealand) are refused
-  ("spans 360 deg"): a limit of this check, not of the data.
+- Outlines split at the 180° meridian (Fiji, Kiribati, New Zealand) are covered piece
+  by piece since 2026-11-01 (F-37); before, they were refused, which hid that the clip
+  had dropped everyone east of 180°. At resolution 9: Fiji 867,854, loss 14,673
+  (−1.7%; 1,269 of the 14,297 east of 180°, coastal cells of small islands).
 
 The first 53 countries passed on 2026-10-13, and the five territories clipped to Natural
 Earth outlines passed when they were added.

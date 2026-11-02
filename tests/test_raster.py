@@ -95,6 +95,42 @@ def test_clip_drops_pixels_outside_polygon(tmp_path):
     assert unclipped.pixels_valid == 16 and unclipped.pixels_clipped == 0
 
 
+def _write_at(tmp_path, arr, west, north, size=0.01):
+    path = tmp_path / "at.tif"
+    with rasterio.open(
+        path, "w", driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1,
+        dtype="float32", crs="EPSG:4326", transform=from_origin(west, north, size, size),
+        nodata=-99999.0,
+    ) as ds:
+        ds.write(arr.astype("float32"), 1)
+    return path
+
+
+def _box(w, s, e, n):
+    return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
+
+
+# F-37: Meta's Fiji, Kiribati and New Zealand grids run past 180 degrees (Fiji's to 181.8)
+# while outlines write the same land as -180 to -179, so the clip dropped every person
+# east of 180 (Fiji: 14,776). An outline in either form must keep them.
+@pytest.mark.parametrize("past", [True, False])
+def test_clip_across_180(tmp_path, past):
+    arr = np.ones((2, 4)) * 3.0  # 8 px, lng 179.98..180.02 (or -180.02..-179.98)
+    west = 179.98 if past else -180.02
+    path = _write_at(tmp_path, arr, west=west, north=-16.0)
+    # Fiji's outline form: a piece up to 180 and a piece from -180.
+    clip = [_box(179.9, -16.1, 180.0, -15.9), _box(-180.0, -16.1, -179.9, -15.9)]
+    cells, pops, stats = raster_to_h3(path, 9, clip=clip)
+    assert stats.pixels_clipped == 0 and pops.sum() == 24.0
+    # The same cells as pixel centers written in -180..180.
+    lngs = [179.985, 179.995, -179.995, -179.985]
+    want = {h3.str_to_int(h3.latlng_to_cell(la, lo, 9)) for la in (-16.005, -16.015) for lo in lngs}
+    assert set(cells.tolist()) == want
+    # Only the west piece: the two columns east of 180 go, and nothing else.
+    _c, p, s = raster_to_h3(path, 9, clip=clip[:1] if past else clip[1:])
+    assert s.pixels_clipped == 4 and p.sum() == 12.0
+
+
 def _write_shuffled(tmp_path, arr, strip_rows, order):
     """A GeoTIFF whose strips sit in the file in `order` (strip indices), not row order.
 

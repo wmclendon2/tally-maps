@@ -38,7 +38,10 @@ Chad and other neighbors. Every raster is therefore clipped to the country's
 territories with no usable geoBoundaries outline (HKG, MAC, JEY, VIR, PCN, GRL, SXM, MAF,
 NFK, SPM, ESH) are clipped to Natural Earth's outline, grown slightly to catch the coast and cut at the neighbors
 (`ingest/boundaries.py`). Greenland's geoBoundaries coast runs inland of its towns and kept
-265 of its 55,581 people.
+265 of its 55,581 people. Outlines write longitudes from −180 to 180, but Meta's grids for
+Fiji, Kiribati and New Zealand run on past 180 (to 181.8° for Fiji), so a raster that
+does is clipped against its outline moved by 360° as well (`raster.clip_for_grid`);
+without it, Fiji's Lau islands and New Zealand's Chatham Islands were left out.
 
 **Overlaps.** Neighboring outlines come from different national sources and disagree
 about where a border runs, so they overlap in strips along it, and Meta's bounding-box

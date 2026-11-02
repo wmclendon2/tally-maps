@@ -38,7 +38,7 @@ but it is a deliberate choice.
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 | F-35 | Detail limits: measure the cost and accuracy of more cells | Inbox | S (M if it leads to a change) | ★★ | ✅ | After F-34 |
 | F-36 | WorldPop everywhere: one source for every country | Inbox (for a future decision) | M–L | ★★ | ✅ | F-32 |
-| F-37 | People across the 180° line: check every country and repair | Inbox | S–M | ★★ | ✅ | — |
+| F-38 | Atolls and small islands: people outside a coarse outline (Tarawa: 4,740) | Inbox | S–M | ★★ | ✅ | — |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
@@ -372,6 +372,32 @@ Candidates still open:
   sits in its region, and fills the counted area in the heatmap's crimson, not the drawn
   shape's blue. Fiji's missing people east of 180° became F-37.
 
+### F-37 People across the 180° line
+- **Why:** found 2026-11-01 while building F-04: Fiji's pack has no one east of 180°.
+  Meta's FJI raster runs 176.9° to 181.8° E, so it writes Taveuni's east side and the
+  Lau islands as longitudes past 180; the geoBoundaries outline it is clipped to writes
+  the same land as -180 to -179. The two never meet, so the clip drops 14,776 people
+  (860,594 of the raster's people lie west of 180; the pack holds 853,556). On the map
+  those islands are bare land.
+- **Plan:** (1) Check: list every country whose raster, outline or
+  clip touches 180° (Fiji, New Zealand's Chatham Islands, the USA's Aleutians, Kiribati,
+  Russia's Chukotka; Tuvalu, Tonga and Wallis and Futuna sit near it) and compare the
+  raster's people either side of 180 with the pack. (2) Repair: unwrap the clip (or
+  the raster) onto one side of 180 before clipping, for Meta's past-180 grids and
+  WorldPop's alike; the overlap split, the no-data mask and `audit_overlaps.py` need the
+  same care. (3) A test with a cell either side of 180, then rebuild the countries hit and
+  the overlap step for their neighbors. Effort: S to check, M with the rebuilds.
+- **Shipped 2026-11-01:** checked: of all 233 rasters, three run past 180 (FJI to
+  181.8°, KIR 202.8°, NZL 183.8°); RUS (WorldPop, −180 to 180), USA (Aleutian tiles) and TUV stay in
+  −180 to 180, as their outlines do. **Repaired:** `raster.clip_for_grid` adds the
+  outline moved by 360° where a grid runs past an end (a test with pixels either side,
+  both ways round). Fiji 853,556 → 867,854 (+14,298: Taveuni's east side and Lau), New
+  Zealand 4,519,164 → 4,519,791 (+627, the Chatham Islands); Kiribati is unchanged, as
+  Meta's file has no one east of 180 (no Phoenix or Line Islands, Kiritimati included).
+  `verify_country.py` covered these outlines piece by piece for the first time (it had
+  refused them) and all three pass. No overlap lies near 180, so the overlap split and
+  audit need no change; `audit_overlaps.py` would need the same move if one ever did.
+
 ## Notes on Inbox items
 
 - **F-06:** needs ADM1/ADM2 outlines from geoBoundaries (same license) as a light vector
@@ -461,19 +487,15 @@ Candidates still open:
   people who noted one), disputed areas follow LSIB everywhere (as CGAZ does today), and
   the checks and docs redone. Decide after F-32's comparison. Effort: M–L, mostly machine
   time (downloads and a full rebuild).
-- **F-37:** found 2026-11-01 while building F-04: Fiji's pack has no one east of 180°.
-  Meta's FJI raster runs 176.9° to 181.8° E, so it writes Taveuni's east side and the
-  Lau islands as longitudes past 180; the geoBoundaries outline it is clipped to writes
-  the same land as -180 to -179. The two never meet, so the clip drops 14,776 people
-  (860,594 of the raster's people lie west of 180; the pack holds 853,556). On the map
-  those islands are bare land. (1) Check: list every country whose raster, outline or
-  clip touches 180° (Fiji, New Zealand's Chatham Islands, the USA's Aleutians, Kiribati,
-  Russia's Chukotka; Tuvalu, Tonga and Wallis and Futuna sit near it) and compare the
-  raster's people either side of 180 with the pack. (2) Repair: unwrap the clip (or
-  the raster) onto one side of 180 before clipping, for Meta's past-180 grids and
-  WorldPop's alike; the overlap split, the no-data mask and `audit_overlaps.py` need the
-  same care. (3) A test with a cell either side of 180, then rebuild the countries hit and
-  the overlap step for their neighbors. Effort: S to check, M with the rebuilds.
+- **F-38:** found 2026-11-01 while checking F-37: Kiribati's raster holds 98,163 people
+  and its pack 93,423. The 4,740 the clip drops are on Tarawa's atoll strips (1,583 by
+  Betio and Bairiki, more along North Tarawa) and lie outside geoBoundaries' outline, as
+  Greenland's coastal towns once did. Check every island country for raster people its
+  clip drops with no neighbor to take them (the build's `clipped_total` already counts
+  them), then, where the outline is too coarse, grow the clip as WorldPop's are grown
+  (`boundaries.CLIP_GROW_DEG`) or use Natural Earth's coast. Likely candidates: Kiribati,
+  the Marshall Islands, Tuvalu, the Maldives, Micronesia, Tokelau. Effort: S to check,
+  S–M to repair and rebuild.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
@@ -513,3 +535,4 @@ Candidates still open:
 | F-31 | A tab left open survives a release: "new version" notice, retry on a renamed pack, the count kept across Reload | 2026-10-20 |
 | F-10 | WorldPop 100 m for the other 35 places Meta lacks (233 countries and territories); disputed borders through the overlap split | 2026-10-30 |
 | F-04 | Export results as CSV and GeoJSON; countries framed on their people; clearer saved images | 2026-11-01 |
+| F-37 | People across the 180° line: Fiji +14,298 (Taveuni, Lau), New Zealand +627 (Chatham Islands) | 2026-11-01 |
