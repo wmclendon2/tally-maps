@@ -131,7 +131,9 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
 `Makefile` targets honor it (`UV_CACHE_DIR=.uv-cache make test`).
 
 - Env: `UV_CACHE_DIR=.uv-cache uv sync` (add `--group browser` for the browser checks)
-- Tests: `UV_CACHE_DIR=.uv-cache uv run pytest -q`; lint: `uv run ruff check .` (or `make check`)
+- Tests: `UV_CACHE_DIR=.uv-cache uv run pytest -q`; lint: `uv run ruff check .` **and**
+  `uv run ruff format --check .` (CI runs both; `ruff format .` fixes the second). Before
+  committing, `UV_CACHE_DIR=.uv-cache make check` runs all three.
 - Packs: `UV_CACHE_DIR=.uv-cache uv run python scripts/build_packs.py --country CMR
   [--country XXX ...] [--rebuild] [--fresh] [--max-part-mb 16] [--workers N]`
 - Build: `UV_CACHE_DIR=.uv-cache uv run python scripts/build_static.py [--country CMR ...]
