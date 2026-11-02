@@ -98,8 +98,15 @@ def test_clip_drops_pixels_outside_polygon(tmp_path):
 def _write_at(tmp_path, arr, west, north, size=0.01):
     path = tmp_path / "at.tif"
     with rasterio.open(
-        path, "w", driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1,
-        dtype="float32", crs="EPSG:4326", transform=from_origin(west, north, size, size),
+        path,
+        "w",
+        driver="GTiff",
+        height=arr.shape[0],
+        width=arr.shape[1],
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(west, north, size, size),
         nodata=-99999.0,
     ) as ds:
         ds.write(arr.astype("float32"), 1)
