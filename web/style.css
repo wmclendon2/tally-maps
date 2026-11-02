@@ -74,9 +74,18 @@ html, body { margin: 0; height: 100%; font-family: var(--ui); color: var(--ink);
 }
 
 /* ---- brand ---- */
-.brand { position: relative; display: flex; align-items: center; gap: 10px; padding-right: 30px; }
-/* The title line leaves room for the language globe; the tagline may run under it. */
-.brand h1 { margin-right: 54px; }
+/* Mark, name, language and ? on one centerline (the first row, as tall as the mark: the
+   bigger tap targets overflow it evenly rather than push it down); the tagline below,
+   under the name, with the whole width to itself. */
+.brand {
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: 30px auto;
+  column-gap: 10px; align-items: center;
+}
+.brand-text { display: contents; }
+.brand .mark { grid-area: 1 / 1; }
+.brand h1 { grid-area: 1 / 2; }
+.brand-tools { grid-area: 1 / 3; display: flex; align-items: center; gap: 2px; margin-right: -4px; }
+.brand .tagline { grid-area: 2 / 2 / 3 / 4; }
 .mark { width: 30px; height: 30px; flex: none; }
 h1 {
   display: flex; align-items: center; gap: 8px; margin: 0;
@@ -298,9 +307,10 @@ button:disabled { opacity: .45; cursor: default; }
     background: color-mix(in srgb, var(--muted) 45%, transparent);
   }
   .grabber:active { transform: none; }
-  .mark { width: 26px; height: 26px; }
+  .mark { width: 28px; height: 28px; }
+  .brand { grid-template-rows: 28px auto; }
   h1 { font-size: 17px; }
-  .tagline { display: none; }
+  .tagline { font-size: 12.5px; }
   .modes { margin-top: 10px; }
   /* A phone has little map to spare: once there is a count, the how-to sentence goes. */
   #panel.has-result .how:not(:has(input)) { display: none; }
@@ -329,7 +339,7 @@ button:disabled { opacity: .45; cursor: default; }
 /* Echoes the Tally hexagon rather than a generic circle, and uses the ramp's two ends
    so it belongs to the same palette as the heatmap. */
 .help {
-  position: absolute; top: -1px; right: -1px; width: 26px; height: 26px;
+  width: 34px; height: 34px; min-height: 0;
   padding: 0; border: 0; background: none; line-height: 0; cursor: pointer;
   border-radius: 8px;
 }
@@ -350,7 +360,7 @@ button:disabled { opacity: .45; cursor: default; }
 /* The language, left of the ?: a globe and the code ("FR"), with the native <select>
    laid invisibly over both so a tap opens the platform's own list. */
 .lang-quick {
-  position: absolute; top: -1px; right: 32px; height: 26px; padding: 0 6px 0 4px;
+  position: relative; height: 28px; padding: 0 6px 0 4px;
   display: inline-flex; align-items: center; gap: 3px; border-radius: 8px;
   color: #980043; font-size: 11.5px; font-weight: 600; letter-spacing: .3px;
   cursor: pointer; transition: background .15s ease, color .15s ease;
@@ -361,6 +371,13 @@ button:disabled { opacity: .45; cursor: default; }
   cursor: pointer; font-size: 16px; /* 16px: iOS would zoom the page on a smaller one */
 }
 .lang-quick:hover { background: #f5d6e8; }
+/* Fingers: both reach 40 px, centered, so neither shifts off the line (the globe's
+   select fills its whole box). */
+@media (pointer: coarse) {
+  .help, .lang-quick { height: 40px; }
+  .help { width: 40px; }
+  .brand-tools { margin-right: -7px; }
+}
 .lang-quick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-color-scheme: dark) {
   .lang-quick { color: #f3b9d8; }

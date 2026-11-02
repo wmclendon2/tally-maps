@@ -33,9 +33,9 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=58">
+  <link rel="stylesheet" href="style.css?v=59">
   <!-- The interface's languages (F-01): first, so the strings load while the map does. -->
-  <script src="i18n.js?v=58"></script>
+  <script src="i18n.js?v=59"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -59,28 +59,31 @@
         <h1 id="app-name">Tally</h1>
         <p class="tagline" data-i18n="brand.tagline">How many people live here?</p>
       </div>
-      <!-- The language, one tap from the start (F-01): a native <select> over a globe, so
-           each platform opens its own list; the About sheet has the same choice. -->
-      <label class="lang-quick" title="Language" data-i18n-attr="title=about.languageTitle">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="9"/>
-          <path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9s1.3-6.4 3.9-9z"/>
-        </svg>
-        <span id="language-code" aria-hidden="true">EN</span>
-        <select id="language-quick" aria-label="Language"
-                data-i18n-attr="aria-label=about.languageTitle"></select>
-      </label>
-      <button id="coverage-open" class="help" aria-label="About Tally, settings and saved data"
-              title="About Tally, settings and saved data"
-              data-i18n-attr="aria-label=about.open;title=about.open">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <polygon class="hex" points="12,1.6 21.2,6.8 21.2,17.2 12,22.4 2.8,17.2 2.8,6.8"/>
-          <g transform="translate(0.5 -0.5)">
-            <path class="qm" d="M9.5 9.5a2.6 2.6 0 1 1 3.3 2.5c-.65.28-1.05.82-1.05 1.55v.85"/>
-            <circle class="dot" cx="11.75" cy="17.1" r="1.15"/>
-          </g>
-        </svg>
-      </button>
+      <!-- The language and About sit in the brand row, centered on the mark with it. -->
+      <div class="brand-tools">
+        <!-- The language, one tap from the start (F-01): a native <select> over a globe, so
+             each platform opens its own list; the About sheet has the same choice. -->
+        <label class="lang-quick" title="Language" data-i18n-attr="title=about.languageTitle">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9s1.3-6.4 3.9-9z"/>
+          </svg>
+          <span id="language-code" aria-hidden="true">EN</span>
+          <select id="language-quick" aria-label="Language"
+                  data-i18n-attr="aria-label=about.languageTitle"></select>
+        </label>
+        <button id="coverage-open" class="help" aria-label="About Tally, settings and saved data"
+                title="About Tally, settings and saved data"
+                data-i18n-attr="aria-label=about.open;title=about.open">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polygon class="hex" points="12,1.6 21.2,6.8 21.2,17.2 12,22.4 2.8,17.2 2.8,6.8"/>
+            <g transform="translate(0.5 -0.5)">
+              <path class="qm" d="M9.5 9.5a2.6 2.6 0 1 1 3.3 2.5c-.65.28-1.05.82-1.05 1.55v.85"/>
+              <circle class="dot" cx="11.75" cy="17.1" r="1.15"/>
+            </g>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div class="modes" role="tablist" aria-label="What to count" data-i18n-attr="aria-label=modes.label">
@@ -332,7 +335,7 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=58"></script>
-  <script src="app.js?v=58"></script>
+  <script src="static.js?v=59"></script>
+  <script src="app.js?v=59"></script>
 </body>
 </html>

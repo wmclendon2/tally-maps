@@ -70,6 +70,9 @@ does not cover.
   English keys (tools read them); their `name` and the image are in the visitor's language.
   `tests/test_i18n.py` checks keys, placeholders, links, en.json against index.html, keys
   the code uses, and a country code for every place.
+- **v59:** the header is one row (mark, name, globe, ?) on one centerline, the tagline under
+  it at full width; phones show the tagline too (the row was already as tall as the tap
+  targets). On v58 an iPhone set the ? lower than the globe (40 px tap targets).
 - **Basemap labels:** OpenFreeMap's tiles carry each place's name in many languages
   (`name:fr`, ...); `localizeLabels` in app.js makes each label read the visitor's first,
   falling back to what the style showed (English, or Latin and local scripts), on the map
