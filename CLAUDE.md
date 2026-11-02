@@ -31,8 +31,9 @@ Read it before changing the pipeline, the pack format or the resolver.
   a refusal (never a silent coarser answer). **Change both together**
   and run `scripts/browser_parity.py`. `browser_countries.py`'s `country_resolution` ports
   `countryResolution` in static.js.
-- Shell versioning: `index.html` loads `app.js?v=N`, `static.js?v=N`, `style.css?v=N`, and
-  `sw.js` sets `SHELL_VERSION = "N"`. **Bump both on any change to a versioned asset**
+- Shell versioning: `index.html` loads `app.js?v=N`, `static.js?v=N`, `style.css?v=N`,
+  `i18n.js?v=N` (which fetches `i18n/<lang>.json?v=N`), and `sw.js` sets
+  `SHELL_VERSION = "N"`. **Bump both on any change to a versioned asset or a language file**
   (`tests/test_web_shell.py` fails if they drift). Only navigations use `ignoreSearch`
   offline, so a stale asset never stands in for a versioned one.
 - Never remove an answer field a cached app reads: for an installed PWA that is a breaking
@@ -44,6 +45,13 @@ Read it before changing the pipeline, the pack format or the resolver.
   "new version" notice compares the worker's `SHELL_VERSION` (sw.js answers "version")
   with the page's `?v=`; Reload keeps the count in `sessionStorage`. Checked by
   `scripts/browser_update.py`.
+- Languages (F-01): every word on screen is a key in `web/i18n/en.json`, looked up with
+  `t()` (app.js) or marked `data-i18n*` (index.html, whose English must match en.json); a
+  new key goes in every `web/i18n/*.json`. Errors static.js shows carry `key`/`vars`
+  (`said()`); app.js's `errText` says them. Numbers through `fmtInt`/`fmtFixed` (the
+  visitor's locale), never `toLocaleString("en-US")`. Exported keys stay English.
+  `tests/test_i18n.py` checks all of it. A new language: its file, `LANGUAGES` in
+  `i18n.js`, and the list in `sw.js`.
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
   `tolerance: 0` on the `population-cells` source (otherwise sub-pixel hexes vanish when
   zoomed out).

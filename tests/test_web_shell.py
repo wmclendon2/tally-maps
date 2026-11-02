@@ -22,7 +22,7 @@ def sw_version() -> str:
     return m.group(1)
 
 
-VERSIONED_ASSETS = ("app.js", "static.js", "style.css")
+VERSIONED_ASSETS = ("app.js", "static.js", "style.css", "i18n.js")
 
 
 def index_versions() -> dict[str, str]:
@@ -35,7 +35,7 @@ def index_versions() -> dict[str, str]:
 
 def test_index_versions_every_cacheable_asset():
     assert set(index_versions()) == set(VERSIONED_ASSETS), (
-        "index.html must request app.js and style.css with a ?v= so a new page cannot "
+        "index.html must request its scripts and style.css with a ?v= so a new page cannot "
         "pair with an old cached script"
     )
 
@@ -49,7 +49,7 @@ def test_index_and_service_worker_agree():
 
 
 def test_service_worker_precaches_the_versioned_urls():
-    for asset in ("app.js", "static.js", "style.css"):
+    for asset in VERSIONED_ASSETS:
         assert f"./{asset}?v=${{SHELL_VERSION}}" in SW, (
             f"sw.js must precache {asset} at the versioned URL the page requests, "
             "or the first offline load misses"

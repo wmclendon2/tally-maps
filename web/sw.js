@@ -6,12 +6,12 @@
  * (*.tlyp.gz) are not cached here either: static.js keeps them in IndexedDB, which this
  * file's activate step (it deletes every cache but the current shell) cannot wipe. */
 
-// Bump SHELL_VERSION on any change to static.js, app.js, style.css or this file, and
-// change the ?v= in index.html to match -- tests/test_web_shell.py fails if the two drift
-// apart. The query string is what stops a freshly fetched index.html from pairing with a stale cached
+// Bump SHELL_VERSION on any change to static.js, app.js, style.css, i18n.js, i18n/*.json
+// or this file, and change the ?v= in index.html to match -- tests/test_web_shell.py fails
+// if the two drift apart. The query string is what stops a freshly fetched index.html from pairing with a stale cached
 // app.js: a mismatched pair once shipped black hexagons and a dead detail toggle with no
 // error at all, because the old script read a field the new answers no longer carried.
-const SHELL_VERSION = "55";
+const SHELL_VERSION = "58";
 const CACHE = `tally-shell-v${SHELL_VERSION}`;
 const SHELL = [
   "./",
@@ -19,6 +19,10 @@ const SHELL = [
   `./static.js?v=${SHELL_VERSION}`,
   `./app.js?v=${SHELL_VERSION}`,
   `./style.css?v=${SHELL_VERSION}`,
+  // The interface's languages (F-01): every one, so a change of language works offline.
+  // i18n.js asks for them with its own ?v=; keep the list in step with its LANGUAGES.
+  `./i18n.js?v=${SHELL_VERSION}`,
+  ...["en", "es", "fr", "id", "pt"].map((l) => `./i18n/${l}.json?v=${SHELL_VERSION}`),
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

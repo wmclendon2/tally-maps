@@ -16,7 +16,12 @@ const DATA_URL = document.querySelector('meta[name="tally-data"]').content;
 const BACKEND = "Data: downloaded packs";
 // The catalog loads at once (a few KB); the packs come with the first polygon.
 const staticData = TallyStatic.load(DATA_URL);
-const fmtMB = (b) => (b > 0 && b < 5e4 ? "<0.1" : (b / 1e6).toFixed(b >= 1e7 ? 0 : 1));
+// Words in the visitor's language (i18n.js, web/i18n/). Numbers are written the
+// language's way: 1 234 567 in French, 1.234.567 in Spanish and Indonesian.
+const { t } = TallyI18n;
+const fmtFixed = (x, places) =>
+  x.toLocaleString(TallyI18n.locale, { minimumFractionDigits: places, maximumFractionDigits: places });
+const fmtMB = (b) => (b > 0 && b < 5e4 ? `<${fmtFixed(0.1, 1)}` : fmtFixed(b / 1e6, b >= 1e7 ? 0 : 1));
 // index.html preconnects to this host, so keep the two in step.
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 // The map opens on the view the data's bbox will fit, so a first visit loads one set of
@@ -25,16 +30,39 @@ const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 // of fewer countries still opens here and then fits its own.
 const START_BOUNDS = [[-180, -55.9], [180, 84.1]];
 
+// The basemap's place names in the visitor's language. OpenFreeMap's tiles carry each
+// name in many languages ("name:fr": "Pékin"); its style shows the English one, or the
+// Latin and local scripts together. Each label asks for the language's name first and
+// falls back to what the style showed; English keeps the style exactly. Done on
+// style.load, before any tile is drawn, for the map and the saved image alike.
+function localizeLabels(m) {
+  const lang = TallyI18n.wanted;
+  if (lang === "en") return;
+  const own = (field) => ["coalesce", ["get", `name:${lang}`], ["get", field]];
+  const swap = (e) =>
+    !Array.isArray(e)
+      ? e
+      : e[0] === "get" && (e[1] === "name_en" || e[1] === "name:latin") && e.length === 2
+        ? own(e[1])
+        : e.map(swap);
+  for (const layer of m.getStyle().layers) {
+    if (layer.type !== "symbol") continue;
+    const field = m.getLayoutProperty(layer.id, "text-field");
+    const local = swap(field);
+    if (JSON.stringify(local) !== JSON.stringify(field)) m.setLayoutProperty(layer.id, "text-field", local);
+  }
+}
+
 // Sequential ramp, light -> dark (ColorBrewer PuRd, with the two palest steps dropped so
 // the light end stays visible on the basemap's beige and green). Index = log10(density).
 const RAMP = ["#dcc0e0", "#c994c7", "#df65b0", "#e7298a", "#ce1256", "#980043"];
 
 const $ = (id) => document.getElementById(id);
-const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+const fmtInt = (n) => Math.round(n).toLocaleString(TallyI18n.locale);
 // Every count of people says it is an estimate, so no one takes it for a census.
-const EST = "(est.)";
-const fmtDensity = (d) => (d >= 100 ? fmtInt(d) : d.toFixed(d >= 10 ? 0 : 1));
-const fmtArea = (a) => (a >= 100 ? fmtInt(a) : a.toFixed(1));
+const est = () => t("est");
+const fmtDensity = (d) => (d >= 100 ? fmtInt(d) : fmtFixed(d, d >= 10 ? 0 : 1));
+const fmtArea = (a) => (a >= 100 ? fmtInt(a) : fmtFixed(a, 1));
 const DEBUG = new URLSearchParams(location.search).get("debug") === "1";
 
 // ---- units -------------------------------------------------------------------
@@ -182,6 +210,7 @@ const map = new maplibregl.Map({
   // The attribution control is added once the manifest says what to credit.
   attributionControl: false,
 });
+map.on("style.load", () => localizeLabels(map));
 map.addControl(new maplibregl.NavigationControl(), "top-right");
 // On a phone the panel is a bottom sheet; keep it above the credits bar, whose height
 // depends on how many lines the credits wrap to.
@@ -247,7 +276,7 @@ const showHex = (e) => {
   const n = Math.round(e.features[0].properties.population);
   popup
     .setLngLat(e.lngLat)
-    .setHTML(`<b>${fmtInt(n)}</b> ${EST} ${n === 1 ? "person" : "people"} in this hexagon`)
+    .setHTML(t("hex.people", { n, est: est() }))
     .addTo(map);
 };
 map.on("mousemove", "population-fill", showHex);
@@ -309,13 +338,13 @@ map.on("load", () => {
 
   setStatus(DEBUG ? BACKEND : "");
   foldCredits();
-  showStaticData();
+  // The credits and the country names need the visitor's language.
+  TallyI18n.ready.then(showStaticData);
 });
 
 function setDrawActive(on) {
   $("draw").classList.toggle("active", on);
-  $("draw").classList.toggle("active", on);
-  $("draw-label").textContent = on ? "Drawing… Esc to cancel" : "Draw a shape";
+  $("draw-label").textContent = t(on ? "draw.active" : "draw.start");
   $("finish").hidden = !on;
 }
 
@@ -351,10 +380,6 @@ const TOUCH = matchMedia("(hover: none) and (pointer: coarse)").matches;
 const SKETCH_SOURCE = "sketch";
 const CLOSE_PX = 24; // a corner placed this near the first one closes the shape
 let sketch = null; // the corners placed so far, [lng, lat], while drawing; else null
-
-if (TOUCH)
-  $("shape-how").textContent =
-    "Outline an area corner by corner, with a crosshair, to count everyone inside.";
 
 function addSketchLayers() {
   map.addSource(SKETCH_SOURCE, { type: "geojson", data: EMPTY });
@@ -413,16 +438,16 @@ function drawSketch() {
       geometry: { type: "LineString", coordinates: n >= 2 ? [sketch[n - 1], next, sketch[0]] : [sketch[0], next] } });
   map.getSource(SKETCH_SOURCE)?.setData({ type: "FeatureCollection", features });
 
-  $("sketch-add-label").textContent = closing ? "Close the shape" : "Add corner";
+  $("sketch-add-label").textContent = t(closing ? "sketch.close" : "sketch.add");
   $("sketch-undo").disabled = n === 0;
   $("sketch-finish").disabled = n < 3;
   $("shape-how").textContent = closing
-    ? "The cross is on the first corner. Close the shape to count."
+    ? t("sketch.howClosing")
     : n === 0
-      ? "Move the map until the cross is on the first corner, then Add corner. Or tap the map there."
+      ? t("sketch.howFirst")
       : n < 3
-        ? `${n === 1 ? "One corner" : "Two corners"}. Move the cross to the next one.`
-        : `${n} corners. Add more, or Finish to count everyone inside.`;
+        ? t(n === 1 ? "sketch.howOne" : "sketch.howTwo")
+        : t("sketch.howMore", { n });
 }
 
 function startSketch() {
@@ -445,8 +470,7 @@ function endSketch(shape = null) {
   $("shape-actions").hidden = false;
   $("sketch-tools").hidden = true;
   $("crosshair").hidden = true;
-  $("shape-how").textContent =
-    "Outline an area corner by corner, with a crosshair, to count everyone inside.";
+  $("shape-how").textContent = t("shape.howTouch");
   map.getSource(SKETCH_SOURCE)?.setData(shape
     ? { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: shape }] }
     : EMPTY);
@@ -506,7 +530,7 @@ function setToolOnly() {
 function setCollapsed(on) {
   $("panel").classList.toggle("collapsed", on);
   $("sheet-toggle").setAttribute("aria-expanded", String(!on));
-  $("sheet-toggle").setAttribute("aria-label", on ? "Show more" : "Show less");
+  $("sheet-toggle").setAttribute("aria-label", t(on ? "sheet.more" : "sheet.less"));
 }
 $("sheet-toggle").addEventListener("click", () =>
   setCollapsed(!$("panel").classList.contains("collapsed")),
@@ -544,7 +568,7 @@ const UPDATE_EVERY_MS = 60 * 60 * 1000;
 const UPDATE_ON_RETURN_MS = 5 * 60 * 1000; // not on every switch between tabs
 let lastUpdateCheck = Date.now();
 
-function showUpdate(text = "A new version of Tally is available.") {
+function showUpdate(text = t("update.available")) {
   $("update-text").textContent = text;
   $("update").hidden = false;
 }
@@ -768,9 +792,7 @@ function clearCircle() {
 function setPicking(on) {
   pickingPoint = on;
   $("pick-point").classList.toggle("active", on);
-  $("pick-label").textContent = on
-    ? TOUCH ? "Tap the map… or here to cancel" : "Click the map… Esc to cancel"
-    : "Pick a point";
+  $("pick-label").textContent = t(on ? (TOUCH ? "pick.activeTouch" : "pick.active") : "pick.start");
   map.getCanvas().style.cursor = on ? "crosshair" : "";
   if (on && draw && draw.getMode() === "polygon") {
     draw.setMode("static");
@@ -780,10 +802,12 @@ function setPicking(on) {
   setToolOnly();
 }
 
-const fmtCoord = (v, pos, neg) => `${Math.abs(v).toFixed(3)}°${v >= 0 ? pos : neg}`;
+// "4.050°N" in English, "4,050°N" in French, "4,050°LU" in Indonesian.
+const fmtCoord = (v, pos, neg) => t(`coord.${v >= 0 ? pos : neg}`, { v: fmtFixed(Math.abs(v), 3) });
 const fmtDist = (km) => {
   const v = km / U().km;
-  return `${v >= 10 ? fmtInt(v) : String(Math.round(v * 100) / 100)} ${U().dist}`;
+  const shown = v >= 10 ? fmtInt(v) : (Math.round(v * 100) / 100).toLocaleString(TallyI18n.locale);
+  return `${shown} ${U().dist}`;
 };
 
 function queryRadius() {
@@ -798,9 +822,8 @@ function queryRadius() {
   });
   clearShape();
   const [lng, lat] = radiusCenter;
-  queryPopulation(
-    geometry,
-    () => `within ${fmtDist(radiusKm)} of ${fmtCoord(lat, "N", "S")}, ${fmtCoord(lng, "E", "W")}`,
+  queryPopulation(geometry, () =>
+    t("where.radius", { dist: fmtDist(radiusKm), at: `${fmtCoord(lat, "n", "s")}, ${fmtCoord(lng, "e", "w")}` }),
   );
 }
 
@@ -870,8 +893,8 @@ function setUnits(u, { fromUser = false } = {}) {
     b.setAttribute("aria-pressed", String(on));
   }
   $("area-unit").textContent = U().area;
-  $("density-unit").textContent = `per ${U().area}`;
-  $("legend-title").textContent = `people per ${U().area} in each hexagon`;
+  $("density-unit").textContent = t("unit.per", { area: U().area });
+  $("legend-title").textContent = t("legend.title", { area: U().area });
   showRadius();
   scale?.setUnit(u);
   // A circle on the map is counted again at its new radius; any other count is just
@@ -916,15 +939,14 @@ async function describeData() {
     const m = await staticData;
     const n = m.countries.length;
     const billions = m.total / 1e9;
-    const people = billions >= 1 ? `${billions.toFixed(1)} billion` : fmtInt(m.total);
-    scope.innerHTML =
-      `It has data for <span class="fig">${fmtInt(n)}</span> ` +
-      `${n === 1 ? "country or territory" : "countries and territories"}, ` +
-      `<span class="fig">${people}</span> ${EST} people in all. Gray land on the map has no data yet.`;
+    const people = billions >= 1 ? t("about.billion", { n: fmtFixed(billions, 1) }) : fmtInt(m.total);
+    const fig = (x) => `<span class="fig">${x}</span>`;
+    // `n` picks the plural; {count} is the same number, set as a figure.
+    scope.innerHTML = t("about.scope", { n, count: fig(fmtInt(n)), people: fig(people), est: est() });
     scope.hidden = false;
-    $("about-version").textContent = `Version ${SHELL}, data built ${m.built}.`;
+    $("about-version").textContent = t("about.version", { version: SHELL, built: m.built });
   } catch (err) {
-    live.textContent = `Could not load the population data (${err.message}).`;
+    live.textContent = t("about.loadFailed", { error: errText(err) });
     live.hidden = false;
   }
 }
@@ -952,21 +974,10 @@ async function renderSaved() {
   $("saved").hidden = false;
   const list = $("saved-list");
   try {
-    const groups = new Map();
-    for (const c of await TallyStatic.countries()) {
-      const k = c.continent ?? "Other";
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push(c);
-    }
-    const byName = (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" });
-    const names = [...groups.keys()].sort((a, b) =>
-      a === "Other" ? 1 : b === "Other" ? -1 : byName(a, b),
-    );
-    list.replaceChildren(
-      ...names.map((k) => continentGroup(k, groups.get(k).sort((a, b) => byName(a.name, b.name)))),
-    );
+    const groups = byContinent(await TallyStatic.countries());
+    list.replaceChildren(...[...groups].map(([k, countries]) => continentGroup(k, countries)));
   } catch (err) {
-    list.textContent = `Could not read this browser's saved data (${err.message}).`;
+    list.textContent = t("saved.readFailed", { error: errText(err) });
   }
 }
 
@@ -982,19 +993,19 @@ function continentGroup(continent, countries) {
   const summary = document.createElement("summary");
   const name = document.createElement("span");
   name.className = "saved-name";
-  name.textContent = continent;
+  name.textContent = continentName(continent);
   const state = document.createElement("span");
   state.className = "saved-state";
   const bytes = countries.reduce((a, c) => a + c.bytes, 0);
   const savedBytes = countries.reduce((a, c) => a + c.savedBytes, 0);
   const full = countries.filter((c) => c.savedParts === c.parts).length;
-  const word = countries.length === 1 ? "country" : "countries";
+  const n = countries.length;
   state.textContent =
     savingContinent === continent
-      ? "Downloading…"
-      : full === countries.length
-        ? `${countries.length} ${word}, all saved, ${fmtMB(savedBytes)} MB`
-        : `${countries.length} ${word}, ${full} saved, ${fmtMB(bytes - savedBytes)} MB to save`;
+      ? t("saved.downloading")
+      : full === n
+        ? t("saved.groupAll", { n, mb: fmtMB(savedBytes) })
+        : t("saved.groupSome", { n, saved: full, mb: fmtMB(bytes - savedBytes) });
   summary.append(textBlock(name, state));
 
   // Buttons inside <summary> would also open or close the section; stop that.
@@ -1009,8 +1020,8 @@ function continentGroup(continent, countries) {
       try {
         await run();
       } catch (err) {
-        state.textContent = `Failed: ${err.message}`;
-        if (err.name === "DataUpdatedError") showUpdate(err.message);
+        state.textContent = t("saved.failed", { error: errText(err) });
+        if (err.name === "DataUpdatedError") showUpdate(errText(err));
         savingContinent = null;
         for (const x of summary.querySelectorAll("button")) x.disabled = false;
         return;
@@ -1020,7 +1031,7 @@ function continentGroup(continent, countries) {
     summary.append(b);
   };
   if (full < countries.length)
-    action("Save all", async () => {
+    action(t("saved.saveAll"), async () => {
       savingContinent = continent;
       const todo = countries.filter((c) => c.savedParts < c.parts);
       const total = todo.reduce((a, c) => a + c.bytes - c.savedBytes, 0);
@@ -1029,9 +1040,13 @@ function continentGroup(continent, countries) {
         // One country at a time, so a failure says which one and keeps what finished.
         for (const [i, c] of todo.entries()) {
           await TallyStatic.saveCountry(c.iso3, ({ received }) => {
-            state.textContent =
-              `Downloading ${c.name} (${i + 1} of ${todo.length}), ` +
-              `${fmtMB(done + received)} of ${fmtMB(total)} MB`;
+            state.textContent = t("saved.groupProgress", {
+              country: c.shownName,
+              i: i + 1,
+              n: todo.length,
+              got: fmtMB(done + received),
+              total: fmtMB(total),
+            });
           });
           done += c.bytes - c.savedBytes;
         }
@@ -1040,7 +1055,7 @@ function continentGroup(continent, countries) {
       }
     });
   if (savedBytes)
-    action("Remove all", async () => {
+    action(t("saved.removeAll"), async () => {
       for (const c of countries) if (c.savedParts) await TallyStatic.removeCountry(c.iso3);
     });
 
@@ -1064,15 +1079,15 @@ function savedRow(c) {
   const li = document.createElement("li");
   const name = document.createElement("span");
   name.className = "saved-name";
-  name.textContent = c.name;
+  name.textContent = c.shownName;
   const state = document.createElement("span");
   state.className = "saved-state";
   const full = c.savedParts === c.parts;
   state.textContent = full
-    ? `Saved, ${fmtMB(c.savedBytes)} MB`
+    ? t("saved.full", { mb: fmtMB(c.savedBytes) })
     : c.savedParts
-      ? `Partly saved, ${fmtMB(c.savedBytes)} of ${fmtMB(c.bytes)} MB`
-      : `Not saved, ${fmtMB(c.bytes)} MB`;
+      ? t("saved.partly", { got: fmtMB(c.savedBytes), total: fmtMB(c.bytes) })
+      : t("saved.none", { mb: fmtMB(c.bytes) });
   li.append(textBlock(name, state));
 
   const action = (label, run) => {
@@ -1084,8 +1099,8 @@ function savedRow(c) {
       try {
         await run();
       } catch (err) {
-        state.textContent = `Failed: ${err.message}`;
-        if (err.name === "DataUpdatedError") showUpdate(err.message);
+        state.textContent = t("saved.failed", { error: errText(err) });
+        if (err.name === "DataUpdatedError") showUpdate(errText(err));
         for (const x of li.querySelectorAll("button")) x.disabled = false;
         return;
       }
@@ -1094,12 +1109,12 @@ function savedRow(c) {
     li.append(b);
   };
   if (!full)
-    action(c.savedParts ? "Save the rest" : "Save", () =>
+    action(t(c.savedParts ? "saved.saveRest" : "saved.save"), () =>
       TallyStatic.saveCountry(c.iso3, ({ received, total }) => {
-        state.textContent = `Downloading… ${fmtMB(received)} of ${fmtMB(total)} MB`;
+        state.textContent = t("saved.progress", { got: fmtMB(received), total: fmtMB(total) });
       }),
     );
-  if (c.savedParts) action("Remove", () => TallyStatic.removeCountry(c.iso3));
+  if (c.savedParts) action(t("saved.remove"), () => TallyStatic.removeCountry(c.iso3));
   return li;
 }
 
@@ -1120,7 +1135,7 @@ async function showStaticData() {
   try {
     m = await staticData;
   } catch (err) {
-    setStatus(`Could not load the population data (${err.message}). Reload to retry.`, true);
+    setStatus(t("status.noData", { error: errText(err) }), true);
   }
   // Added even without data: the basemap's own credits are a license condition too.
   // One string, grouped by what each credit is for: given several, MapLibre reorders them,
@@ -1133,7 +1148,7 @@ async function showStaticData() {
       .push(`<a href="${a.url}" target="_blank" rel="noopener">${a.name}</a> (${a.licence})`);
   }
   const credits = groups.size
-    ? [...groups].map(([what, links]) => `${what}: ${links.join(", ")}`).join(" | ")
+    ? [...groups].map(([what, links]) => `${t(`credits.${what}`)}: ${links.join(", ")}`).join(" | ")
     : undefined;
   map.addControl(
     new maplibregl.AttributionControl({ compact: PHONE_SHEET.matches, customAttribution: credits }),
@@ -1141,6 +1156,7 @@ async function showStaticData() {
   addScale();
   foldCredits();
   trackCreditsHeight();
+  localizeControls();
   if (!m) return;
   // A wash over the countries with no data; dashed borders round the covered ones stopped
   // helping once they ran round most of the world (191 countries, 2026-10-13).
@@ -1170,22 +1186,11 @@ async function showStaticData() {
 // The country picker: every country in the data, by continent then name, as the ? panel
 // lists them. Picking one shows all of it, counted from its own data (TallyStatic.country).
 async function fillPicker() {
-  const groups = new Map();
-  for (const c of await TallyStatic.countries()) {
-    const k = c.continent ?? "Other";
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(c);
-  }
-  const byName = (a, b) => a.localeCompare(b, undefined, { sensitivity: "base" });
-  const names = [...groups.keys()].sort((a, b) =>
-    a === "Other" ? 1 : b === "Other" ? -1 : byName(a, b),
-  );
   const select = $("country-pick");
-  for (const k of names) {
+  for (const [k, countries] of byContinent(await TallyStatic.countries())) {
     const group = document.createElement("optgroup");
-    group.label = k;
-    for (const c of groups.get(k).sort((a, b) => byName(a.name, b.name)))
-      group.append(new Option(c.name, c.iso3));
+    group.label = continentName(k);
+    for (const c of countries) group.append(new Option(c.shownName, c.iso3));
     select.append(group);
   }
   for (const el of document.querySelectorAll("[data-static-only]")) el.hidden = false;
@@ -1205,9 +1210,38 @@ $("country-pick").addEventListener("change", (e) => {
   queryCountry(iso3, { frame: true });
 });
 
-function listNames(countries) {
-  const names = countries.map((c) => c.name ?? c); // country objects or plain names
-  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+// "Benin, Niger and Nigeria", in the visitor's language.
+const listNames = (names) =>
+  new Intl.ListFormat(TallyI18n.locale, { style: "long", type: "conjunction" }).format(names);
+
+// Places in the visitor's language: the browser names countries (i18n.js); a language
+// file names the continents.
+const countryName = (iso3, fallback) => TallyI18n.countryName(iso3, fallback);
+const continentName = (k) => t(`continent.${k}`);
+const byLocalName = (a, b) => a.localeCompare(b, TallyI18n.locale, { sensitivity: "base" });
+
+// Countries by continent, each in name order as the visitor's language sorts them, with
+// "Other" last: the picker and the ? panel list them the same way. Adds `shownName`.
+function byContinent(countries) {
+  const groups = new Map();
+  for (const c of countries) {
+    const k = c.continent ?? "Other";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push({ ...c, shownName: countryName(c.iso3, c.name) });
+  }
+  const keys = [...groups.keys()].sort((a, b) =>
+    a === "Other" ? 1 : b === "Other" ? -1 : byLocalName(continentName(a), continentName(b)),
+  );
+  return new Map(keys.map((k) => [k, groups.get(k).sort((a, b) => byLocalName(a.shownName, b.shownName))]));
+}
+
+// An error in words the visitor can read: static.js names its own (`key`), app.js's
+// carry theirs; anything else is shown as it came.
+function errText(err) {
+  if (!err?.key) return err?.message ?? String(err);
+  const vars = { ...err.vars };
+  if (vars.country) vars.country = countryName(vars.country, vars.country);
+  return t(err.key, vars);
 }
 
 // ---- queries -----------------------------------------------------------------
@@ -1255,7 +1289,7 @@ for (const b of document.querySelectorAll(".seg[data-detail]")) {
 function setFineAvailable(available) {
   const fineOn = detail === "fine";
   $("detail-fine").disabled = !available && !fineOn;
-  $("detail-note").textContent = available ? "" : fineOn ? "Full detail" : "Already at full detail";
+  $("detail-note").textContent = available ? "" : t(fineOn ? "detail.full" : "detail.already");
   $("detail-note").hidden = available;
 }
 
@@ -1267,6 +1301,7 @@ class StaleAppError extends Error {
   constructor() {
     super("Tally has been updated. Reload to get the latest.");
     this.name = "StaleAppError";
+    this.key = "err.updated";
   }
 }
 
@@ -1311,7 +1346,7 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
   const controller = new AbortController();
   inflight = controller;
   $("draw").disabled = true;
-  setStatus("Querying…");
+  setStatus(t("status.querying"));
   try {
     const body = await ask(controller);
     // A static answer cannot be aborted mid-flight, so drop it if a newer query started.
@@ -1327,8 +1362,8 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
     // Out of date, or the data changed under the page: said in the notice, with Reload.
     if (err.name === "StaleAppError" || err.name === "DataUpdatedError") {
       setStatus("");
-      showUpdate(err.message);
-    } else setStatus(`Query failed: ${err.message}`, true);
+      showUpdate(errText(err));
+    } else setStatus(t("status.failed", { error: errText(err) }), true);
   } finally {
     if (inflight === controller) {
       inflight = null;
@@ -1337,8 +1372,11 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
   }
 }
 
-const showDownload = ({ received, total, names }) => {
-  if (total) setStatus(`Downloading ${listNames(names)} data… ${fmtMB(received)} of ${fmtMB(total)} MB`);
+// Older static.js (a cached shell) reports names only; it is never paired with this file.
+const showDownload = ({ received, total, names, iso3s }) => {
+  const shown = iso3s ? iso3s.map((c, i) => countryName(c, names[i])) : names;
+  if (total)
+    setStatus(t("status.downloading", { names: listNames(shown), got: fmtMB(received), total: fmtMB(total) }));
 };
 
 async function staticQuery(geometry) {
@@ -1359,6 +1397,7 @@ const SOURCE_CREDITS = {
   worldpop_100m: "WorldPop, Global2 R2025A constrained 100 m (CC BY 4.0)",
 };
 const sourceKeys = (source) => String(source).split(", ").filter((k) => k in SOURCE_CREDITS);
+const sourceNames = (source) => listNames(sourceKeys(source).map((k) => SOURCE_NAMES[k])) || source;
 
 // ---- rendering ---------------------------------------------------------------
 
@@ -1375,8 +1414,8 @@ function render(res) {
   const hi = densities.length ? Math.log10(Math.max(...densities) + 1) : 1;
   const span = Math.max(hi - lo, 1e-9);
   const colorFor = (density) => {
-    const t = Math.min(1, Math.max(0, (Math.log10(density + 1) - lo) / span));
-    return RAMP[Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))];
+    const frac = Math.min(1, Math.max(0, (Math.log10(density + 1) - lo) / span));
+    return RAMP[Math.min(RAMP.length - 1, Math.floor(frac * RAMP.length))];
   };
 
   const features = res.cells.map((c) => ({
@@ -1404,38 +1443,37 @@ function render(res) {
   $("debug").hidden = !DEBUG;
 
   $("legend-bar").style.background = `linear-gradient(to right, ${RAMP.join(", ")})`;
-  const ticks = [0, 0.5, 1].map((t) => showDensity(Math.pow(10, lo + t * span) - 1));
-  $("legend-ticks").innerHTML = ticks.map((t) => `<span>${t}</span>`).join("");
+  const ticks = [0, 0.5, 1].map((f) => showDensity(Math.pow(10, lo + f * span) - 1));
+  $("legend-ticks").innerHTML = ticks.map((x) => `<span>${x}</span>`).join("");
 
   // Under the number, in words: what was counted.
-  const people = Math.round(res.total) === 1 ? "person" : "people";
+  const n = Math.round(res.total);
   $("counted").textContent = res.country
-    ? `${people} in ${res.country.name}`
+    ? t("counted.country", { n, country: countryName(res.country.iso3, res.country.name) })
     : lastLabel
-      ? `${people} ${lastLabel()}`
-      : `${people} inside your shape`;
+      ? t("counted.where", { n, where: lastLabel() })
+      : t("counted.shape", { n });
   // Which data a country's count is, since there is no drawn shape to explain it.
   $("counted-source").hidden = !res.country;
   if (res.country) {
-    const from = sourceKeys(res.source).map((k) => SOURCE_NAMES[k]).join(" and ") || res.source;
     const year = String(res.country.data_version ?? "").slice(0, 4);
-    $("counted-source").textContent = `Whole country, ${from} data${year ? ` from ${year}` : ""}`;
+    $("counted-source").textContent = t(year ? "counted.sourceYear" : "counted.source", {
+      source: sourceNames(res.source),
+      year,
+    });
   }
 
   $("result").hidden = false;
   $("panel").classList.add("has-result");
   // A total that leaves a country out must say so: it is a floor, not an answer.
   if (res.missing?.length) {
-    setStatus(
-      `At least ${fmtInt(res.total)} ${EST}: could not download ${listNames(res.missing)} data, ` +
-        "so it is left out. Check your connection and draw again.",
-      true,
-    );
+    const left = res.missing_iso3?.map((c, i) => countryName(c, res.missing[i])) ?? res.missing;
+    setStatus(t("status.leftOut", { n: fmtInt(res.total), est: est(), names: listNames(left) }), true);
     return;
   }
   setStatus(
     res.populated_cells === 0
-      ? "No people here. Gray land on the map has no data."
+      ? t("status.nobody")
       : DEBUG
         ? BACKEND
         : "",
@@ -1450,8 +1488,8 @@ function buildCellFeatures(res) {
   const hi = densities.length ? Math.log10(Math.max(...densities) + 1) : 1;
   const span = Math.max(hi - lo, 1e-9);
   const colorFor = (density) => {
-    const t = Math.min(1, Math.max(0, (Math.log10(density + 1) - lo) / span));
-    return RAMP[Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))];
+    const frac = Math.min(1, Math.max(0, (Math.log10(density + 1) - lo) / span));
+    return RAMP[Math.min(RAMP.length - 1, Math.floor(frac * RAMP.length))];
   };
   return {
     type: "FeatureCollection",
@@ -1515,6 +1553,7 @@ function renderMap({ width, height, setup }) {
       pixelRatio: 2,
       fadeDuration: 0,
     });
+    m.on("style.load", () => localizeLabels(m));
     const done = () => {
       try {
         const src = m.getCanvas();
@@ -1565,7 +1604,7 @@ async function exportImage() {
   if (!lastResult || !(lastGeometry || lastResult.country)) return;
   const btn = $("export");
   btn.disabled = true;
-  setStatus("Rendering image…");
+  setStatus(t("status.rendering"));
   try {
     const geometry = lastGeometry;
     const res = lastResult;
@@ -1658,19 +1697,14 @@ async function exportImage() {
     );
     ctx.fillStyle = "#1d1a24";
     ctx.font = `600 34px ${UI_FONT}`;
-    ctx.fillText(
-      res.country
-        ? `Population of ${res.country.name}`
-        : lastLabel
-          ? `Population ${lastLabel()}`
-          : "Population inside a drawn shape",
-      PAD, 62,
-    );
+    ctx.fillText(countTitle(res), PAD, 62);
     ctx.fillStyle = "#6b6577";
     ctx.font = `400 16px ${UI_FONT}`;
-    const when = new Date().toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" });
+    // English has always been dated the British way, "2 November 2026 at 14:30".
+    const dateLocale = TallyI18n.lang === "en" ? "en-GB" : TallyI18n.locale;
+    const when = new Date().toLocaleString(dateLocale, { dateStyle: "long", timeStyle: "short" });
     // The address, not the name: images travel without context, and it brings people back.
-    ctx.fillText(`Counted at tallymaps.org on ${when}`, PAD, 90);
+    ctx.fillText(t("image.counted", { when }), PAD, 90);
 
     const top = 120;
     ctx.drawImage(detailMap, PAD, top, DW, DH);
@@ -1683,26 +1717,25 @@ async function exportImage() {
     ctx.strokeRect(rx + 0.5, top + 0.5, OW - 1, OH - 1);
 
     let y = top + OH + 60;
-    drawStat(ctx, rx, y, "People", fmtInt(res.total), EST, { size: 56, color: "#980043" });
+    drawStat(ctx, rx, y, t("image.people"), fmtInt(res.total), est(), { size: 56, color: "#980043" });
     y += 12;
     y += 100;
-    drawStat(ctx, rx, y, "Area", showArea(res.areaKm2), U().area);
+    drawStat(ctx, rx, y, t("fact.area"), showArea(res.areaKm2), U().area);
     y += 100;
-    drawStat(ctx, rx, y, "Density", showDensity(res.density), `people per ${U().area}`);
+    drawStat(ctx, rx, y, t("fact.density"), showDensity(res.density), t("image.densityUnit", { area: U().area }));
 
     ctx.fillStyle = "#888";
     ctx.font = `400 12px ${UI_FONT}`;
     const credits = sourceKeys(res.source).map((k) => SOURCE_CREDITS[k]);
     ctx.fillText(
-      `Population: ${(credits.length ? credits : [SOURCE_CREDITS.meta_hrsl]).join("; ")}. ` +
-        "Map: OpenFreeMap © OpenMapTiles, data © OpenStreetMap contributors.",
+      t("image.credits", { population: (credits.length ? credits : [SOURCE_CREDITS.meta_hrsl]).join("; ") }),
       PAD, H - 22,
     );
 
     const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    setStatus(`Saved ${saveFile(blob, "png")}`);
+    setStatus(t("status.saved", { file: saveFile(blob, "png") }));
   } catch (err) {
-    setStatus(`Could not save the image: ${err.message}`, true);
+    setStatus(t("status.imageFailed", { error: errText(err) }), true);
   } finally {
     btn.disabled = false;
   }
@@ -1729,14 +1762,19 @@ function saveFile(blob, ext) {
 
 const round = (x, places) => Math.round(x * 10 ** places) / 10 ** places;
 
-// What was counted, in the same words as the panel and the image.
+// The image's title and the files' `name`: what was counted, in the visitor's language.
+const countTitle = (res) =>
+  res.country
+    ? t("image.titleCountry", { country: countryName(res.country.iso3, res.country.name) })
+    : lastLabel
+      ? t("image.titleWhere", { where: lastLabel() })
+      : t("image.titleShape");
+
+// What was counted, in the same words as the panel and the image. The keys and `kind`
+// stay English whatever the language: other tools read them.
 function exportSummary(res) {
   const kind = res.country ? "country" : lastLabel ? "circle" : "shape";
-  const name = res.country
-    ? res.country.name
-    : lastLabel
-      ? `Population ${lastLabel()}`
-      : "Population inside a drawn shape";
+  const name = res.country ? countryName(res.country.iso3, res.country.name) : countTitle(res);
   const year = res.country ? String(res.country.data_version ?? "").slice(0, 4) : "";
   return {
     name,
@@ -1770,7 +1808,7 @@ function exportCsv() {
   const lines = [Object.keys(row), Object.values(row)].map((r) => r.map(csvField).join(","));
   // The byte-order mark makes Excel read the file as UTF-8 (Côte d'Ivoire, km²).
   const blob = new Blob(["﻿" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
-  setStatus(`Saved ${saveFile(blob, "csv")}`);
+  setStatus(t("status.saved", { file: saveFile(blob, "csv") }));
 }
 
 // ~10 cm: enough for any hexagon or drawn vertex, and it keeps 40,000 cells to a few MB.
@@ -1804,13 +1842,54 @@ function exportGeojson() {
   };
   const text = JSON.stringify({ type: "FeatureCollection", features: [...hexagons, shape] });
   const blob = new Blob([text], { type: "application/geo+json" });
-  setStatus(`Saved ${saveFile(blob, "geojson")}`);
+  setStatus(t("status.saved", { file: saveFile(blob, "geojson") }));
 }
 
 $("export").addEventListener("click", exportImage);
 $("export-csv").addEventListener("click", exportCsv);
 $("export-geojson").addEventListener("click", exportGeojson);
 
-// Last, once everything it touches exists: labels, radius box and scale in the saved units.
-setUnits(units);
+// ---- language (F-01) ------------------------------------------------------------
+// The ? sheet lists every language in its own words. Picking one reloads the page in it,
+// keeping the count, as Reload does after an update: every word on the page, the map's
+// buttons and the country names change at once, with nothing left in the old language.
+// Two pickers, one choice: the globe in the panel's corner and the one in About.
+function fillLanguages() {
+  for (const pick of [$("language-pick"), $("language-quick")]) {
+    for (const [code, name] of Object.entries(TallyI18n.LANGUAGES)) pick.append(new Option(name, code));
+    pick.value = TallyI18n.lang;
+  }
+  $("language-code").textContent = TallyI18n.lang.toUpperCase();
+  $("language-draft").hidden = !TallyI18n.draft;
+}
+for (const id of ["language-pick", "language-quick"])
+  $(id).addEventListener("change", (e) => {
+    if (e.target.value === TallyI18n.lang) return;
+    TallyI18n.choose(e.target.value);
+    keepCount();
+    location.reload();
+  });
+
+// MapLibre's own buttons: their tooltips and screen-reader names.
+function localizeControls() {
+  const c = map.getContainer();
+  const label = (sel, key) => {
+    for (const el of c.querySelectorAll(sel)) {
+      el.title = t(key);
+      el.setAttribute("aria-label", t(key));
+    }
+  };
+  label(".maplibregl-ctrl-zoom-in", "map.zoomIn");
+  label(".maplibregl-ctrl-zoom-out", "map.zoomOut");
+  label(".maplibregl-ctrl-compass", "map.north");
+  label(".maplibregl-ctrl-attrib-button", "map.credits");
+}
+
 setMode(savedMode(), { remember: false });
+// Last, once everything it touches exists and the words are in: labels, radius box and
+// scale in the saved units.
+TallyI18n.ready.then(() => {
+  if (TOUCH) $("shape-how").textContent = t("shape.howTouch");
+  fillLanguages();
+  setUnits(units);
+});

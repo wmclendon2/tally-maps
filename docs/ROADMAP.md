@@ -18,7 +18,6 @@ but it is a deliberate choice.
 
 | ID | Feature | Stage | Effort | Value | Privacy | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| F-01 | Multi-lingual interface | Shaped | M | ★★★ | ✅ | — |
 | F-02 | Upload polygons (SHP/GeoJSON/KML/GPKG), batch results | Shaped | M–L | ★★★ | ✅ | — |
 | F-05 | Shareable link to a shape (in the URL fragment) | Inbox | S | ★★ | ✅ | — |
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
@@ -56,8 +55,31 @@ does not cover.
 - **First languages:** French, Portuguese, Spanish, then Arabic, which is right-to-left and
   needs a layout pass of its own.
 - **Effort:** M, mostly the one-off string extraction; each further language is S.
-- **Open questions:** who checks the translations; whether the trust pages are translated
-  at launch.
+- **Decided 2026-11-02:** French, Spanish, Portuguese and Indonesian first (Arabic waits for
+  its right-to-left pass); the About sheet is translated too, disclaimer included; the
+  translations ship as drafts, and About says so in each language and invites corrections
+  on GitHub (`_draft` in each file; drop it once a native speaker has checked one).
+- **Shipped 2026-11-02 (shell v58):** `web/i18n.js` loads `web/i18n/<lang>.json` (en.json is
+  the reference and the fallback for a missing key); plurals by `Intl.PluralRules`, numbers,
+  lists and dates by `Intl`, country names by `Intl.DisplayNames` (a language may name a
+  country itself, `country.HKG`, where the browser's name reads badly in a list; English
+  keeps the catalog's names). The language is the one picked (a globe beside the ?, or
+  About), else the browser's, else English (picking the browser's own forgets the choice);
+  picking one reloads the page with the count kept. `index.html` keeps its English, marked
+  with `data-i18n*`; static.js's errors a person reads carry a key. The CSV and GeoJSON keep
+  English keys (tools read them); their `name` and the image are in the visitor's language.
+  `tests/test_i18n.py` checks keys, placeholders, links, en.json against index.html, keys
+  the code uses, and a country code for every place.
+- **Basemap labels:** OpenFreeMap's tiles carry each place's name in many languages
+  (`name:fr`, ...); `localizeLabels` in app.js makes each label read the visitor's first,
+  falling back to what the style showed (English, or Latin and local scripts), on the map
+  and the saved image. OpenStreetMap's `name:pt` is mostly European Portuguese (Polónia,
+  Moscovo) where the panel, from `Intl`, says Polônia: the tiles have no `name:pt-BR`.
+- **Not translated:** the `?debug=1` line, the shared-link preview,
+  `manifest.webmanifest`, and the basemap's own credits line.
+- **Strings to check first:** the disclaimer (`about.disclaimer`), Safari's menu names in
+  `about.installHow` (Indonesian especially), and Portuguese, written for Brazil
+  ("bilhões", "baixar"), which Angola and Mozambique read the European way.
 
 ### F-02 Upload polygons, batch processing
 - **Why:** turns Tally from "explore" into a work tool. NGOs, planners and researchers keep
@@ -536,3 +558,4 @@ Candidates still open:
 | F-10 | WorldPop 100 m for the other 35 places Meta lacks (233 countries and territories); disputed borders through the overlap split | 2026-10-30 |
 | F-04 | Export results as CSV and GeoJSON; countries framed on their people; clearer saved images | 2026-11-01 |
 | F-37 | People across the 180° line: Fiji +14,298 (Taveuni, Lau), New Zealand +627 (Chatham Islands) | 2026-11-01 |
+| F-01 | French, Spanish, Portuguese and Indonesian (drafts, corrections invited): the panel, About, errors, the saved image and the map's place names; a globe beside the ? to switch | 2026-11-02 |

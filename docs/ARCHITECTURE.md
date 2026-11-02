@@ -139,7 +139,7 @@ minus the built countries' outlines). The **Country** tab sums a country's own p
 one level, with no outline or polyfill.
 
 **App shell and service worker.** `index.html` loads `static.js?v=N`, `app.js?v=N` and
-`style.css?v=N`, and `sw.js` sets `SHELL_VERSION = "N"`. Both change together on every change
+`style.css?v=N` and `i18n.js?v=N`, and `sw.js` sets `SHELL_VERSION = "N"`. Both change together on every change
 to one of those files (`tests/test_web_shell.py` fails if they drift). This exists because a
 cached `app.js` once paired with a newer page that no longer sent a field it read: the map
 went black and nothing said why. The app now says "Tally has been updated. Reload to get the
@@ -154,6 +154,18 @@ newer service worker took over (the page asks the worker its version: `sw.js` an
 "version"). It looks for a new worker when the tab comes back into view and hourly. Reload
 keeps what was counted (`sessionStorage`); the page never reloads by itself.
 
+**Languages** (F-01). `web/i18n.js` runs first and loads `web/i18n/<lang>.json` for the
+language picked (the globe beside the ?, or About), else the browser's, else English
+(en.json, the reference, fills any key a language lacks). The panel stays hidden until the
+words are in, so no one sees English turn into French. Numbers, lists, dates and country
+names come from the browser's `Intl`. `index.html` keeps its English, for link previews and
+search engines, and marks each piece with `data-i18n`; `tests/test_i18n.py` keeps en.json in
+step with it. Errors from `static.js` that a person reads carry a key for `app.js` to say
+them in the visitor's language; their English message stays for logs and the checks.
+Exported files keep English keys, as other tools read them. The basemap's place names come
+from its tiles, which carry many languages (`name:fr`); app.js's `localizeLabels` points
+each label at the visitor's.
+
 **Earlier design.** Tally began with a PostGIS database and an API serving the same cells.
 The static app replaced it: it answers the same questions with no server, works offline,
 and keeps every drawn shape on the device. Its Python resolution rule lives on as
@@ -166,7 +178,9 @@ These are easy to break and hard to notice:
 - `web/static.js` and `ingest/resolve.py` implement the same rules. Change both together;
   `scripts/browser_parity.py` checks 18 shapes in headless Chrome.
 - Bump the shell version in both `index.html` and `sw.js` on any change to `static.js`,
-  `app.js`, `style.css` or `sw.js`.
+  `app.js`, `style.css`, `i18n.js`, `web/i18n/*.json` or `sw.js`.
+- Every word a person sees goes through `t()` with a key in `web/i18n/en.json`, and every
+  language file has the key (`tests/test_i18n.py`).
 - Never remove a field from an answer that a cached client may read. To an installed PWA,
   that is a breaking change.
 - Keep the `population-outline` layer and the drawn shape in any heatmap change.

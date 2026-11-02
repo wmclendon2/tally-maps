@@ -75,6 +75,8 @@ html, body { margin: 0; height: 100%; font-family: var(--ui); color: var(--ink);
 
 /* ---- brand ---- */
 .brand { position: relative; display: flex; align-items: center; gap: 10px; padding-right: 30px; }
+/* The title line leaves room for the language globe; the tagline may run under it. */
+.brand h1 { margin-right: 54px; }
 .mark { width: 30px; height: 30px; flex: none; }
 h1 {
   display: flex; align-items: center; gap: 8px; margin: 0;
@@ -161,7 +163,10 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .crosshair.closing::after { inset: 13px; background: color-mix(in srgb, var(--accent) 30%, transparent); }
 
-#country-pick {
+/* Until i18n.js has the visitor's words, the panel waits rather than flash English (F-01). */
+.i18n-wait #panel, .i18n-wait .sheet { visibility: hidden; }
+
+#country-pick, #language-pick {
   width: 100%; font: inherit; font-size: 14.5px; padding: 8px 10px; border-radius: 8px;
   color: var(--ink); background: var(--paper-solid); border: 1px solid var(--rule);
 }
@@ -341,6 +346,25 @@ button:disabled { opacity: .45; cursor: default; }
   .help .hex { fill: #4a2440; stroke: #98356f; }
   .help .qm { stroke: #f3b9d8; }
   .help .dot { fill: #f3b9d8; }
+}
+/* The language, left of the ?: a globe and the code ("FR"), with the native <select>
+   laid invisibly over both so a tap opens the platform's own list. */
+.lang-quick {
+  position: absolute; top: -1px; right: 32px; height: 26px; padding: 0 6px 0 4px;
+  display: inline-flex; align-items: center; gap: 3px; border-radius: 8px;
+  color: #980043; font-size: 11.5px; font-weight: 600; letter-spacing: .3px;
+  cursor: pointer; transition: background .15s ease, color .15s ease;
+}
+.lang-quick svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.lang-quick select {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0;
+  cursor: pointer; font-size: 16px; /* 16px: iOS would zoom the page on a smaller one */
+}
+.lang-quick:hover { background: #f5d6e8; }
+.lang-quick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-color-scheme: dark) {
+  .lang-quick { color: #f3b9d8; }
+  .lang-quick:hover { background: #4a2440; }
 }
 /* The sheet slides in from the right over the map, which stays in view beside it; on a
    phone it takes the whole screen. Same paper, type and hairlines as the panel. */

@@ -128,7 +128,8 @@ const TallyStatic = (() => {
   async function verify(buf, part) {
     const want = isGzip(buf) ? part.sha256 : part.raw_sha256;
     const got = await sha256Hex(buf);
-    if (got && got !== want) throw new Error(`${part.name} data failed its checksum`);
+    if (got && got !== want)
+      throw said(new Error(`${part.name} data failed its checksum`), "err.checksum", { country: part.iso3 });
   }
 
   // Layout: scripts/build_packs.py. The one section wanted is copied out of the unpacked
@@ -137,8 +138,7 @@ const TallyStatic = (() => {
     const dv = new DataView(raw);
     const magic = String.fromCharCode(...new Uint8Array(raw, 0, 4));
     if (magic !== "TLYP") throw new Error("not a Tally data pack");
-    if (dv.getUint16(4, true) !== PACK_MAJOR)
-      throw new DataUpdatedError("Tally has been updated. Reload to get the latest.");
+    if (dv.getUint16(4, true) !== PACK_MAJOR) throw new DataUpdatedError(...UPDATED);
     const n = dv.getUint32(8, true);
     const header = JSON.parse(new TextDecoder().decode(new Uint8Array(raw, 12, n)));
     const start = Math.ceil((12 + n) / 8) * 8;
@@ -167,6 +167,10 @@ const TallyStatic = (() => {
     }
   }
 
+  // An error a person may read carries `key` and `vars` for app.js to say it in their
+  // language (web/i18n/); `message` stays English, for the console and the checks.
+  const said = (err, key, vars = {}) => Object.assign(err, { key, vars });
+
   // A pack the catalog this page read lists, but the host no longer has: renamed by a
   // later deploy. Never shown as it is; withFreshCatalog() reads the catalog again.
   class PackGoneError extends Error {
@@ -179,11 +183,17 @@ const TallyStatic = (() => {
   // What a query ends with when the data changed under the page and a retry could not
   // make up for it: app.js shows the message with a Reload button.
   class DataUpdatedError extends Error {
-    constructor(message = "Tally's data has been updated. Reload to get the latest.") {
+    constructor(
+      message = "Tally's data has been updated. Reload to get the latest.",
+      key = "err.dataUpdated",
+      vars = {},
+    ) {
       super(message);
       this.name = "DataUpdatedError";
+      said(this, key, vars);
     }
   }
+  const UPDATED = ["Tally has been updated. Reload to get the latest.", "err.updated"];
   const isGone = (err) => err?.name === "PackGoneError";
 
   // Stream the file so the caller can show progress; `no-store` keeps a second copy out
@@ -193,7 +203,11 @@ const TallyStatic = (() => {
     if (r.status === 404 || r.status === 410) throw new PackGoneError(part);
     if (!r.ok) {
       console.warn(`${part.url}: HTTP ${r.status}`);
-      throw new Error(`Could not download ${part.name} data. Check the connection and try again.`);
+      throw said(
+        new Error(`Could not download ${part.name} data. Check the connection and try again.`),
+        "err.download",
+        { country: part.iso3 },
+      );
     }
     const chunks = [];
     let got = 0;
@@ -298,6 +312,7 @@ const TallyStatic = (() => {
         received: [...fetching.values()].reduce((a, b) => a + b, 0),
         total: going.reduce((a, p) => a + p.bytes, 0),
         names: [...new Set(going.map((p) => p.name))],
+        iso3s: [...new Set(going.map((p) => p.iso3))],
       });
     };
     const settled = await Promise.allSettled(
@@ -343,8 +358,7 @@ const TallyStatic = (() => {
     const m = await getJson(base);
     const cBase = new URL(m.catalog, base);
     const c = await getJson(cBase);
-    if (c.format?.[0] !== PACK_MAJOR)
-      throw new DataUpdatedError("Tally has been updated. Reload to get the latest.");
+    if (c.format?.[0] !== PACK_MAJOR) throw new DataUpdatedError(...UPDATED);
     m.min_resolution = c.min_resolution;
     m.nodataUrl = new URL(m.nodata, base).href;
     return { m, cBase, c };
@@ -415,7 +429,12 @@ const TallyStatic = (() => {
       } catch (_) {
         throw new DataUpdatedError();
       }
-      if (!changed) throw new DataUpdatedError(`Could not download ${err.part.name} data. Reload to try again.`);
+      if (!changed)
+        throw new DataUpdatedError(
+          `Could not download ${err.part.name} data. Reload to try again.`,
+          "err.downloadReload",
+          { country: err.part.iso3 },
+        );
       try {
         return await ask();
       } catch (err2) {
@@ -488,11 +507,15 @@ const TallyStatic = (() => {
   function cellsFor(geometry, resolution) {
     const cells = cover(geometry, resolution);
     if (cells.length > MAX_CELLS_LIMIT) {
-      const hint =
-        resolution <= manifest.min_resolution ? "Try a smaller area." : "Try less detail, or a smaller area.";
-      throw new Error(
-        `That area needs ${cells.length.toLocaleString("en-US")} cells at H3 resolution ` +
-          `${resolution}, over the ${MAX_CELLS_LIMIT.toLocaleString("en-US")} cell limit. ${hint}`,
+      const coarsest = resolution <= manifest.min_resolution;
+      const hint = coarsest ? "Try a smaller area." : "Try less detail, or a smaller area.";
+      throw said(
+        new Error(
+          `That area needs ${cells.length.toLocaleString("en-US")} cells at H3 resolution ` +
+            `${resolution}, over the ${MAX_CELLS_LIMIT.toLocaleString("en-US")} cell limit. ${hint}`,
+        ),
+        coarsest ? "err.tooManyMin" : "err.tooMany",
+        { cells: cells.length, res: resolution, limit: MAX_CELLS_LIMIT },
       );
     }
     if (cells.length) return cells;
@@ -565,6 +588,7 @@ const TallyStatic = (() => {
       // Static-only: countries left out because their data could not be fetched, and
       // whether the polygon touches any country this demo has at all.
       missing: [...new Set(failed.map((f) => f.part.name))],
+      missing_iso3: [...new Set(failed.map((f) => f.part.iso3))],
       covered: needed.length > 0,
     };
   }
@@ -652,7 +676,7 @@ const TallyStatic = (() => {
     const c = catalog.countries.find((x) => x.iso3 === iso3);
     if (!c) throw new Error(`No data for ${iso3}`);
     if (!c.cells_by_resolution || !c.area_km2)
-      throw new Error("This data is older than the country picker. Reload to update.");
+      throw said(new Error("This data is older than the country picker. Reload to update."), "err.oldData");
     if (!(detail >= 0 && detail <= MAX_DETAIL)) throw new Error(`detail must be between 0 and ${MAX_DETAIL}`);
     const resolution = countryResolution(c, detail);
     const needed = c.parts.map((p) => parts.get(p.url));
@@ -678,6 +702,7 @@ const TallyStatic = (() => {
       cells: out,
       elapsed_ms: Math.round((performance.now() - t0) * 10) / 10,
       missing: failed.length ? [c.name] : [],
+      missing_iso3: failed.length ? [c.iso3] : [],
       covered: true,
       country: {
         iso3: c.iso3,
