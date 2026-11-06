@@ -975,13 +975,13 @@ async function describeData() {
     live.hidden = false;
   }
 }
-// Only a hosted copy may add an analytics beacon (web/ and local builds never have one);
-// say visits are counted only where one is on the page.
-$("about-visits").hidden = !document.querySelector("script[data-cf-beacon]");
-
 function toggleCoverage(open) {
   if (open === !$("coverage").hidden) return;
   $("coverage").hidden = !open;
+  // Only a hosted copy may add an analytics beacon (web/ and local builds never have one), so
+  // visits are said to be counted only where one is on the page. Asked here, not as this file
+  // loads: a hosted copy's beacon tag comes after this script, so it is not there yet.
+  $("about-visits").hidden = !document.querySelector("script[data-cf-beacon]");
   if (open) describeData();
   if (open) renderSaved();
   // Into the sheet on opening, and back to the ? button on closing, for keyboards.

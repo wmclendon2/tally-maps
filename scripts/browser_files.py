@@ -860,6 +860,27 @@ def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> Non
         )
         fr.close()
 
+        console.print("[bold]About[/bold]")
+        page.click("#coverage-open")
+        check("no beacon: nothing says visits are counted", not page.is_visible("#about-visits"))
+        page.keyboard.press("Escape")
+        check("Esc closes it", page.evaluate("() => document.querySelector('#coverage').hidden"))
+        hosted = context.new_page()
+
+        def with_beacon(route):
+            # Where a hosted copy puts it: after app.js, before </body>. Never loads anything.
+            answer = route.fetch()
+            tag = "<script type='text/plain' data-cf-beacon='{}'></script></body>"
+            route.fulfill(response=answer, body=answer.text().replace("</body>", tag))
+
+        hosted.route(url, with_beacon)
+        hosted.goto(url)
+        hosted.wait_for_function("() => typeof toggleCoverage === 'function'")
+        hosted.wait_for_timeout(1000)
+        hosted.click("#coverage-open")
+        check("a beacon after app.js: About says so", hosted.is_visible("#about-visits"))
+        hosted.close()
+
         console.print("[bold]Offline[/bold]")
         # A new visitor's worker has cached the shell; the parsers load from it, and with no
         # pack on the device a row says what is missing rather than show a zero.
