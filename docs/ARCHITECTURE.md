@@ -120,6 +120,15 @@ The resolution is chosen per question (`web/static.js`, with the Python referenc
   no country's download. `build_static.py` writes them for what it builds, and the catalog lists
   them under `continents`, apart from `countries`. They have no footprint and `static.js` keeps
   them out of its cell index: a drawn shape never reads one, or it would count people twice.
+- **A country's overview.** A country of 250 KB or more also has one (129 of them, 7.7 MB): its
+  own cells at every level down to the picker's Fine, and at least to resolution 6, listed as
+  the entry's `overview`. These do answer drawn shapes, because they hold exactly what the
+  country's parts hold at those levels, cell for cell (`browser_countries.py` checks it). At a
+  level an overview has, `static.js` reads it in place of the country's parts when that costs
+  fewer bytes than the parts still missing: all of a country's parts or none, never both, so no
+  one is counted twice. India's Country tab takes 302 KB, not 46 MB. `build_static.py` writes
+  these too, so no country's pack changes. A country saved for offline use owes nothing and
+  keeps reading its parts; if an overview cannot be downloaded, the parts are tried instead.
 - **Names.** Pack files are named by content hash and never change, so hosts and browsers
   can cache them forever.
 
@@ -132,8 +141,9 @@ Terra Draw for drawing with a mouse, and h3-js. Libraries and fonts are vendored
 In static mode, `web/static.js`:
 
 1. reads `catalog.json` and works out which parts a shape's cells fall in;
-2. downloads the parts it does not have yet, checks their SHA-256, and stores them in
-   IndexedDB, so later counts and offline use cost nothing;
+2. downloads the parts it does not have yet (or, for a shape big enough to be read at a coarse
+   level, the country's overview), checks their SHA-256, and stores them in IndexedDB, so later
+   counts and offline use cost nothing;
 3. sums the cells, keeping only the resolution a question reads in memory, up to 96 MB,
    least recently used first out;
 4. if a part cannot be downloaded, says "At least N" and names the missing country rather
@@ -141,7 +151,8 @@ In static mode, `web/static.js`:
 
 The page grays out land it has no data for (`build_static.no_data`, from Natural Earth
 minus the built countries' outlines). The **Country** tab sums a country's own packs at
-one level, with no outline or polyfill; a continent takes the same path from its overview.
+one level, with no outline or polyfill, from its overview if it has one; a continent takes the
+same path from its own.
 
 **A file of shapes or points** (F-02). The **File** tab reads GeoJSON, CSV, KML, KMZ and
 Shapefiles (zipped or loose) in the page: nothing is uploaded. `web/files.js` turns a file

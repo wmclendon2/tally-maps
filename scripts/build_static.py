@@ -43,6 +43,7 @@ from build_packs import (
     country_outline,
     ensure,
     write_catalog,
+    write_country_overviews,
     write_overviews,
 )
 
@@ -219,6 +220,7 @@ def main(
         for p in e["parts"]:
             shutil.copy2(PACK_CACHE / p["url"], packs / p["url"])
     continents = write_overviews(packs, entries)
+    big = write_country_overviews(packs, entries)
     write_catalog(packs, entries, continents)
 
     console.print(f"\n[green]Built {out}[/green] in {time.perf_counter() - t0:.0f} s")
@@ -234,6 +236,9 @@ def main(
             f"  {c['name']}: {c['total']:,} people, {len(c['countries'])} countries, "
             f"overview {c['bytes'] / 1e3:.0f} KB"
         )
+    if big:
+        size = sum(e["overview"]["bytes"] for e in big)
+        console.print(f"  {len(big)} countries have an overview: {size / 1e6:.1f} MB in all")
     console.print(f"  catalog.json: {(packs / 'catalog.json').stat().st_size / 1e3:.0f} KB")
     console.print(
         f"  nodata.geojson: {(data / 'nodata.geojson').stat().st_size / 1e3:.0f} KB"

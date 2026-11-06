@@ -26,7 +26,7 @@ but it is a deliberate choice.
 | F-16 | Embeddable widget for articles | Inbox | M | ★★ | ✅ | F-05 |
 | F-17 | Printable one-page report (PDF) for an area | Inbox | M | ★★ | ✅ | F-04 |
 | F-18 | Public batch API for developers | Parked | L | ★★ | ⚠️ | — |
-| F-25 | Make the app faster, first visit and large shapes | Shaped | M | ★★ | ✅ | — |
+| F-25 | Make the app faster, first visit and large shapes | Shaped (big countries and shapes shipped) | M | ★★ | ✅ | — |
 | F-26 | First-visit welcome: a one-time hint, or open on an example count | Inbox | S | ★ | ✅ | Feedback from first-time users |
 | F-27 | Continuous integration: tests and lint on every push | Shaped (level 1 shipped) | S–M | ★★ | ✅ | — |
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
@@ -240,18 +240,35 @@ first paint is the panel's text at 0.6 s.
   long (1.4 → 0.8 s) and the map is ready 0.3 s sooner; lines and labels are slightly
   softer on screens denser than 2×.
 
-**The biggest remaining wait is data, not the page:** the Country tab downloads every part
-of a country to draw a few thousand coarse hexagons: India 46 MB (43 s on the phone's 4G),
-the USA 35 MB (34 s). A big shape at Normal detail does the same (a West Africa box, 15 s).
-A small overview pack per country with only the coarse levels (a second `tier`; the pack
-header already has one) would make both take about a second. That is a new item to shape.
+**The biggest wait was data, not the page. Done (shell v63, live 2026-11-05):** the Country tab downloaded every
+part of a country to draw a few thousand coarse hexagons, and a big shape at Normal detail did
+the same. A country of 250 KB or more now has an overview pack with only its coarse levels
+(129 countries, 7.7 MB, written by `build_static.py`, so no country's pack changed). It holds
+every level down to the picker's Fine and at least to res 6, and it stands in for the country's
+parts whenever it costs fewer bytes than the parts still missing. Every total is unchanged
+(`browser_countries.py`, `browser_parity.py`).
+
+| On the slowed phone, from nothing stored | Before (v62) | Now (v63) |
+| --- | --- | --- |
+| Country tab: China | 52 s, 56 MB | 2.0 s, 0.6 MB |
+| Country tab: India | 45 s, 46 MB | 1.9 s, 0.3 MB |
+| Country tab: USA | 36 s, 35 MB | 1.8 s, 0.5 MB |
+| Country tab: Brazil | 18 s, 18 MB | 1.7 s, 0.4 MB |
+| Box over the USA, Normal | 38 s, 42 MB | 1.0 s, 0.7 MB |
+| Box over West Africa, Normal | 15 s, 16 MB | 1.8 s, 1.0 MB |
+| Box the size of Bihar, Normal | 15 s, 16 MB | 1.5 s, 1.2 MB |
+
+Measured 2026-11-05, median of 2 or 3, the same phone profile, served locally; the catalog grows
+by about 15 KB gzipped and the time to a ready map did not move. China, Brazil and Nigeria
+(6.3 s to 1.6 s) were timed at an earlier cutoff of 1 MB, which does not change their files. A
+city still downloads its part, as it needs the fine levels: Fine over a Bihar-sized box, at res 6
+here, reads the overview, and a shape read at res 7 or finer reads parts.
 Counting in a Web Worker (candidate 1 below) matters less than thought: the longest freeze
 during those counts was 146 ms on the slowed phone, under INP's 200 ms.
 
 Candidates still open:
 1. **Count in a Web Worker,** so a large shape or a first download never blocks taps (M).
-2. **Smaller first parts for big countries** (M, a pack rebuild), or the overview tier above.
-3. **Self-host the basemap** (M; mostly for reliability, so the map still draws if
+2. **Self-host the basemap** (M; mostly for reliability, so the map still draws if
    OpenFreeMap is down).
 
 ### F-27 Continuous integration
@@ -574,3 +591,4 @@ Candidates still open:
 | F-39 | People past the 180° line: a Radius circle or drawn shape across it is counted in full (50 km on Taveuni: 15,103, was 9,272) | 2026-11-05 |
 | F-02 | Open a file of shapes or points (GeoJSON, KML, KMZ, Shapefile, CSV): up to 500 rows counted on the device, each listed with a sum, click one for its heatmap, save all as CSV or GeoJSON | 2026-11-05 |
 | F-33 | Whole continents in the Country tab: total, density map and saving, from small overview packs (350 KB for all six) | 2026-11-05 |
+| F-25 | Big countries and big shapes in seconds, from small overview packs (India 46 MB and 45 s on a slowed phone, now 0.3 MB and 2 s) | 2026-11-05 |

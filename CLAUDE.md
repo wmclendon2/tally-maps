@@ -29,7 +29,7 @@ Read it before changing the pipeline, the pack format or the resolver.
 - `web/static.js` ports `ingest/resolve.py`: same automatic resolution (AUTO_TARGET_CELLS
   4000), Fine = exactly one level finer capped at the base res, MAX_CELLS_LIMIT 40,000 with
   a refusal (never a silent coarser answer). **Change both together**
-  and run `scripts/browser_parity.py`. `browser_countries.py`'s `country_resolution` ports
+  and run `scripts/browser_parity.py`. `build_packs.py`'s `country_resolution` ports
   `countryResolution` in static.js.
 - Shell versioning: `index.html` loads `app.js?v=N`, `static.js?v=N`, `files.js?v=N`, `style.css?v=N`,
   `i18n.js?v=N` (which fetches `i18n/<lang>.json?v=N`), and `sw.js` sets
@@ -65,6 +65,11 @@ Read it before changing the pipeline, the pack format or the resolver.
 - A continent's overview pack (F-33) stays out of `parts` and `byRoot` in static.js and has no
   footprint: a drawn shape reading one would count the same people twice. It answers through
   `TallyStatic.country("continent:Africa")`, so `countryResolution` and `browser_countries.py` cover it.
+- A country's overview pack (F-25, the entry's `overview`) holds exactly its parts' cells at
+  its levels (`browser_countries.py` compares them on real data), so it may answer drawn shapes:
+  `standIns` in static.js swaps it for all of a country's parts or none, never both, and only
+  when it costs fewer bytes than the parts still missing, so a saved country reads its parts.
+  `build_static.py` writes them, so they change no country's pack.
 - Pack format: a format **major** bump makes old readers refuse a pack; additive changes
   bump the minor. Packs are named by content hash; `write_catalog` adds `continent`,
   `cells_by_resolution` and `area_km2` at write time, so those need no pack rebuild.

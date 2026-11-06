@@ -80,6 +80,11 @@ def rename_packs(site: Path, iso3: str) -> None:
         new = f"{iso3}.f31renamed{i}.tlyp.gz"
         (site / "packs" / part["url"]).rename(site / "packs" / new)
         part["url"] = new
+    # A country with an overview reads that first, so it moves too.
+    if overview := entry.get("overview"):
+        new = f"{iso3}.f31renamed-overview.tlyp.gz"
+        (site / "packs" / overview["url"]).rename(site / "packs" / new)
+        overview["url"] = new
     path.write_text(json.dumps(catalog, separators=(",", ":")))
 
 
@@ -167,7 +172,8 @@ def run(site: Path, url: str, countries: list[dict]) -> list[str]:
         )
         check(notice.is_visible(), "3. ... and the notice")
 
-        (site / "packs" / lost["parts"][0]["url"]).unlink()
+        for file in [*lost["parts"], *([lost["overview"]] if "overview" in lost else [])]:
+            (site / "packs" / file["url"]).unlink()
         got = page.evaluate(
             """async (iso3) => {
                 try { await TallyStatic.country(iso3, 0); return {error: null}; }

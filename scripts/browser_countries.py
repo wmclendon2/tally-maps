@@ -7,13 +7,18 @@
 
 Countries: for each one in the built site's catalog, headless Chrome (fresh profile, so
 everything is downloaded) runs `TallyStatic.country`, the call behind the country picker.
-That downloads every part of the country, checks each against its SHA-256 and sums the
-level the picker shows. The answer must match the same level summed in Python from the
-same pack files: resolution, populated cells and total. Python also checks what the
-picker reads from the catalog without downloading anything: every level of the packs
-sums to the catalog total, `cells_by_resolution` matches the packs, and `area_km2` is
-within a loose bound of Natural Earth's area for the country (a wrong outline shows up as
-a country a fraction of its size; small islands differ most, so it only warns).
+That downloads the country's overview if it has one (F-25), else every part, checks each
+against its SHA-256 and sums the level the picker shows. The answer must match the same
+level summed in Python from the parts: resolution, populated cells and total, and Fine as
+well for a country with an overview. Python also checks what the picker reads from the catalog
+without downloading anything: every level of the packs sums to the catalog total,
+`cells_by_resolution` matches the packs, an overview's levels are its parts' cell for cell, and
+`area_km2` is within a loose bound of Natural Earth's area for the country (a wrong outline
+shows up as a country a fraction of its size; small islands differ most, so it only warns).
+
+Overviews: for a few countries the browser also shows that one is read in place of the parts
+and gives a drawn shape the same count as the parts do, that a saved country reads its own
+parts with no connection, and that with no overview and some parts it says "at least".
 
 Memory: before the countries it draws boxes over the largest countries and their biggest
 cities, Normal and Fine, the queries that held hundreds of MB before the cap in static.js.
@@ -43,11 +48,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from browser_parity import chrome, serve
-from build_packs import decode, unpack
+from build_packs import country_resolution, decode, merge, part_levels, unpack
 
 from ingest.boundaries import area_km2
 from ingest.config import ROOT
-from ingest.resolve import AUTO_TARGET_CELLS, MAX_CELLS_LIMIT
 
 console = Console()
 REL_TOL = 1e-9  # JS sums float32 cells in another order than numpy
@@ -74,20 +78,6 @@ STRESS = {
 }
 
 
-def country_resolution(entry: dict, detail: int = 0) -> int:
-    """web/static.js countryResolution: the level the picker shows a country at."""
-    counts = {int(k): int(v) for k, v in entry["cells_by_resolution"].items()}
-    levels = sorted(counts)
-    res = levels[0]
-    for r in levels:
-        if counts[r] <= AUTO_TARGET_CELLS:
-            res = r
-    res = min(res + detail, int(entry["max_resolution"]))
-    while res > levels[0] and counts[res] > MAX_CELLS_LIMIT:
-        res -= 1
-    return res
-
-
 def expected(packs: Path, entry: dict) -> tuple[dict, list[str]]:
     """The picker's answer for one country, from its pack files, and any catalog problems."""
     problems = []
@@ -107,7 +97,36 @@ def expected(packs: Path, entry: dict) -> tuple[dict, list[str]]:
             problems.append(f"res {res} sums to {total:,.1f}, catalog says {entry['total']:,}")
     res = country_resolution(entry)
     want = {"resolution": res, "populated_cells": counts.get(res, 0), "total": sums.get(res, 0.0)}
+    if overview := entry.get("overview"):
+        problems += overview_problems(packs, entry, overview)
+        fine = country_resolution(entry, 1)
+        want["fine"] = {
+            "resolution": fine,
+            "populated_cells": counts.get(fine, 0),
+            "total": sums.get(fine, 0.0),
+        }
     return want, problems
+
+
+def overview_problems(packs: Path, entry: dict, overview: dict) -> list[str]:
+    """An overview must hold just what the parts hold at its levels, cell for cell."""
+    raw = gzip.decompress((packs / overview["url"]).read_bytes())
+    header, start = unpack(raw)
+    held = decode(raw[start:], header["sections"])
+    wanted = tuple(
+        r for r in map(int, entry["cells_by_resolution"]) if r <= overview["max_resolution"]
+    )
+    parts = merge([part_levels(packs / p["url"], wanted) for p in entry["parts"]])
+    if sorted(held) != sorted(parts):
+        return [f"overview has levels {sorted(held)}, not {sorted(parts)}"]
+    problems = []
+    for res, (cells, pops) in parts.items():
+        same = np.array_equal(held[res][0], cells) and np.array_equal(
+            held[res][1], pops.astype("<f4")
+        )
+        if not same:
+            problems.append(f"overview differs from the parts at res {res}")
+    return problems
 
 
 def natural_earth_areas() -> dict[str, float]:
@@ -123,11 +142,98 @@ def natural_earth_areas() -> dict[str, float]:
     return out
 
 
+# Take files out of this browser's store of packs, as if never downloaded.
+DROP_STORED = """(urls) => new Promise((resolve, reject) => {
+    const open = indexedDB.open("tally-packs", 1);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+        const tx = open.result.transaction("parts", "readwrite");
+        for (const u of urls) tx.objectStore("parts").delete(u);
+        tx.oncomplete = () => { open.result.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+    };
+})"""
+
+
 def box(w, s, e, n):
     return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
 
 
-def run_browser(url: str, isos: list[str], stress: dict) -> tuple[dict, list[dict]]:
+def overview_checks(page, entry: dict, errors: list[str]) -> None:
+    """What an overview changes for one country. Every step reloads, so nothing is in memory."""
+    iso3, overview = entry["iso3"], entry["overview"]
+    fetched: list[str] = []
+
+    def note(request) -> None:
+        if request.url.endswith(".tlyp.gz"):
+            fetched.append(request.url.rsplit("/", 1)[1])
+
+    def fresh(stored_away: list[str] = (), offline: bool = False) -> None:
+        page.context.set_offline(False)
+        page.evaluate(DROP_STORED, list(stored_away))
+        page.reload()
+        page.wait_for_function("typeof TallyStatic !== 'undefined'")
+        page.evaluate("TallyStatic.load(document.querySelector('meta[name=tally-data]').content)")
+        fetched.clear()
+        page.context.set_offline(offline)
+
+    def whole() -> dict:
+        return page.evaluate(
+            """async (c) => {
+                const r = await TallyStatic.country(c, 0);
+                return {total: r.total, cells_total: r.cells_total, missing: r.missing};
+            }""",
+            iso3,
+        )
+
+    def drawn(shape: dict) -> dict:
+        return page.evaluate(
+            """async (g) => {
+                const r = await TallyStatic.query(g, 0);
+                return {total: r.total, cells: r.populated_cells, resolution: r.resolution,
+                        missing: r.missing};
+            }""",
+            shape,
+        )
+
+    page.on("request", note)
+    try:
+        page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
+        fresh()
+        got = whole()
+        if fetched != [overview["url"]] or got["total"] != entry["total"]:
+            errors.append(f"{iso3} from nothing read {fetched}, total {got['total']}")
+
+        # A box over the whole country, read from the overview, then from the parts alone.
+        shape = box(*entry["bbox"])
+        by_overview = drawn(shape)
+        if by_overview["resolution"] > overview["max_resolution"]:
+            errors.append(f"{iso3}'s box is at res {by_overview['resolution']}: pick another")
+        page.evaluate("async (c) => TallyStatic.saveCountry(c)", iso3)
+        fresh([overview["url"]], offline=True)
+        by_parts = drawn(shape)
+        if by_overview != by_parts or fetched:
+            errors.append(f"{iso3} drawn: overview {by_overview}, parts {by_parts}, read {fetched}")
+
+        got = whole()
+        if got["missing"] or got["total"] != entry["total"] or fetched:
+            errors.append(f"{iso3} saved, offline: {got}, read {fetched}")
+
+        # Some parts saved and no overview, offline: it falls back on them and says "at least".
+        if len(entry["parts"]) > 1:
+            fresh([entry["parts"][0]["url"]], offline=True)
+            got = whole()
+            if got["missing"] != [entry["name"]] or not 0 < got["cells_total"] < entry["total"]:
+                errors.append(f"{iso3} with a part missing, offline: {got}")
+    finally:
+        page.remove_listener("request", note)
+        page.context.set_offline(False)
+    page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
+
+
+def run_browser(
+    url: str, isos: list[str], stress: dict, fine: set[str], overview_entry: dict | None
+) -> tuple[dict, list[dict]]:
     """{iso3: picker answer} and one memory sample per step."""
     from playwright.sync_api import sync_playwright
 
@@ -183,6 +289,15 @@ def run_browser(url: str, isos: list[str], stress: dict) -> tuple[dict, list[dic
                 }""",
                 iso3,
             )
+            if iso3 in fine:
+                answers[iso3]["fine"] = page.evaluate(
+                    """async (iso3) => {
+                        const r = await TallyStatic.country(iso3, 1);
+                        return {resolution: r.resolution, populated_cells: r.populated_cells,
+                                cells_total: r.cells_total, missing: r.missing};
+                    }""",
+                    iso3,
+                )
             sample(f"country {iso3}", time.perf_counter() - t)
             if i % 25 == 0 or i == len(isos):
                 console.print(f"  {i}/{len(isos)} countries, {samples[-1]['mb']:.0f} MB")
@@ -215,6 +330,8 @@ def run_browser(url: str, isos: list[str], stress: dict) -> tuple[dict, list[dic
                 "async ([g, d]) => (await TallyStatic.query(g, d)).total", list(again[1])
             ):
                 errors.append(f"{again[0]} changed after reading the continents")
+        if overview_entry:
+            overview_checks(page, overview_entry, errors)
         browser.close()
     if errors:
         raise RuntimeError(f"page errors: {errors}")
@@ -283,12 +400,18 @@ def main(
                 stress[f"{name}-fine"] = (box(*bounds), 1)
     t0 = time.perf_counter()
     checked = [i for i in isos if i in want]
+    fine = {i for i in checked if "fine" in want[i]}
+    # The smallest with parts to fall back on, if there is one.
+    with_overview = sorted(
+        (entries[i] for i in fine), key=lambda e: (len(e["parts"]) < 2, e["bytes"])
+    )
+    trial = with_overview[0] if with_overview else None
     if url:
-        got, samples = run_browser(url, checked, stress)
+        got, samples = run_browser(url, checked, stress, fine, trial)
     else:
         server, local = serve(dist)
         try:
-            got, samples = run_browser(local, checked, stress)
+            got, samples = run_browser(local, checked, stress, fine, trial)
         finally:
             server.shutdown()
     console.print(f"browser pass in {time.perf_counter() - t0:.0f} s")
@@ -303,6 +426,15 @@ def main(
             and g["total"] == entries[iso3]["total"]
             and not g["missing"]
         )
+        if "fine" in w:
+            f, wf = g["fine"], w["fine"]
+            same = (
+                same
+                and f["resolution"] == wf["resolution"]
+                and f["populated_cells"] == wf["populated_cells"]
+                and abs(f["cells_total"] - wf["total"]) <= max(1e-6, abs(wf["total"]) * REL_TOL)
+                and not f["missing"]
+            )
         if not same:
             bad.append(f"{iso3}: browser {g}, expected {w}")
 

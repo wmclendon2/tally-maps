@@ -187,6 +187,14 @@ agree to 0.011%, so the list is the better number.
 
 ## Country picker and memory
 
+A country with an overview (F-25) is read from it there, so that comparison is the overview
+against its parts, Normal and Fine; Python also compares the two cell for cell at every level
+the overview holds. For one country, the same pass then checks that from nothing the Country
+tab fetches only the overview; that a box over the country gives the same count from the
+overview as from its parts alone, offline; and that with a part and the overview missing,
+offline, it falls back on the parts it has and says "at least". Each of those checks was seen to
+fail with the code broken on purpose (2026-11-05).
+
 The same pass answers for each continent from its overview pack: every level must sum to its
 countries' totals, the overview must survive the tidy-up of a page load and answer with no
 connection, and reading the continents must not change a drawn shape's count. **Baseline

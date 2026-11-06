@@ -42,6 +42,10 @@ OVERVIEW_LEVELS only. build_static.py writes them for what it builds. They live 
 catalog's `continents`, apart from `countries`, and have no footprint: a drawn shape must
 never read them, or it would count the same people twice.
 
+A big country also has one (F-25; COUNTRY_OVERVIEW_*): its coarse levels alone, in the
+catalog as the entry's `overview`, so looking at India needs 300 KB and not 46 MB. It holds
+exactly the cells its parts hold at those levels, so reading it instead gives the same answer.
+
 Each part's `footprint` in the catalog is its res-3 cells. A query cell can only draw
 population from a part whose footprint holds the cell's res-3 parent, so the client can
 name exactly the parts a polygon needs with no country outlines at all.
@@ -70,12 +74,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ingest.config import DATA_DIR, MIN_RESOLUTION, SOURCES, WORLDPOP_COUNTRIES, source_keys
 from ingest.continents import continent_name, name_of
+from ingest.resolve import AUTO_TARGET_CELLS, MAX_CELLS_LIMIT
 
 MAGIC = b"TLYP"
 FORMAT = (1, 0)
 # The levels a continent's overview holds. Normal is the finest within 4,000 cells: res 3 for
 # all six (1,100 to 3,800 cells). Fine is one finer: res 4, at most about 20,000.
 OVERVIEW_LEVELS = (3, 4)
+# A country's overview (F-25). Below this size the whole country is a moment's download, and
+# every overview adds to the catalog each visit reads. Not higher: a big shape adds up small
+# countries too (a West Africa box: 5.8 MB with 1 MB here, 1 MB with this).
+COUNTRY_OVERVIEW_MIN_BYTES = 250_000
+# It holds levels down to the picker's Fine, and at least to this one: res 6 is 0.3% of a big
+# country's bytes (India 302 KB of 46 MB) and answers any drawn shape over about 36,000 km2.
+# Res 7 would take it to 1.6 MB, more than half of one of India's parts, for little more.
+COUNTRY_OVERVIEW_FINEST = 6
 FIXED = struct.Struct("<4sHHI")  # magic, major, minor, header length
 ALIGN = 8
 SOURCE = "meta_hrsl"
@@ -572,21 +585,14 @@ def part_levels(path: Path, wanted: tuple[int, ...]) -> dict:
     return {r: (c, p.astype(np.float64)) for r, (c, p) in decode(raw[start:], sections).items()}
 
 
-def build_overview(continent: str, members: list[dict], root: Path) -> tuple[bytes, dict]:
-    """One continent's overview pack, gzipped, and its catalog entry (F-33).
-
-    `iso3` is the code the picker and TallyStatic.country use for it. The entry answers to
-    everything a country's does: countryResolution reads the same fields.
-    """
-    pieces = [part_levels(root / p["url"], OVERVIEW_LEVELS) for e in members for p in e["parts"]]
-    levels = merge(pieces)
-    total = sum(e["total"] for e in members)
-    code = f"continent:{continent}"
-    source = ", ".join(sorted({k for e in members for k in source_keys(e["source"])}))
+def overview_file(
+    code: str, name: str, source: str, levels: dict, total: int, stem: str
+) -> tuple[bytes, dict]:
+    """An overview pack, gzipped, and what the catalog lists about the file."""
     body, sections = encode(levels)
     header = {
         "iso3": code,
-        "name": continent,
+        "name": name,
         "part": 0,
         "parts": 1,
         "source": source,
@@ -600,9 +606,8 @@ def build_overview(continent: str, members: list[dict], root: Path) -> tuple[byt
     check(raw, levels)  # every level comes to the sum of the countries' totals
     packed = gzip.compress(raw, 9, mtime=0)
     digest = hashlib.sha256(packed).hexdigest()
-    slug = continent.lower().replace(" ", "-")
-    part = {
-        "url": f"continent-{slug}.{digest[:10]}.tlyp.gz",
+    return packed, {
+        "url": f"{stem}.{digest[:10]}.tlyp.gz",
         "bytes": len(packed),
         "raw_bytes": len(raw),
         "sha256": digest,
@@ -610,6 +615,21 @@ def build_overview(continent: str, members: list[dict], root: Path) -> tuple[byt
         "cells": int(sum(s["count"] for s in sections)),
         "total": total,
     }
+
+
+def build_overview(continent: str, members: list[dict], root: Path) -> tuple[bytes, dict]:
+    """One continent's overview pack, gzipped, and its catalog entry (F-33).
+
+    `iso3` is the code the picker and TallyStatic.country use for it. The entry answers to
+    everything a country's does: countryResolution reads the same fields.
+    """
+    pieces = [part_levels(root / p["url"], OVERVIEW_LEVELS) for e in members for p in e["parts"]]
+    levels = merge(pieces)
+    total = sum(e["total"] for e in members)
+    code = f"continent:{continent}"
+    source = ", ".join(sorted({k for e in members for k in source_keys(e["source"])}))
+    slug = continent.lower().replace(" ", "-")
+    packed, part = overview_file(code, continent, source, levels, total, f"continent-{slug}")
     entry = {
         "iso3": code,
         "key": continent,
@@ -638,6 +658,53 @@ def write_overviews(out: Path, entries: dict[str, dict]) -> list[dict]:
         packed, entry = build_overview(continent, by_continent[continent], out)
         (out / entry["parts"][0]["url"]).write_bytes(packed)
         found.append(entry)
+    return found
+
+
+def country_resolution(entry: dict, detail: int = 0) -> int:
+    """web/static.js countryResolution: the level the picker shows a country at."""
+    counts = {int(k): int(v) for k, v in entry["cells_by_resolution"].items()}
+    levels = sorted(counts)
+    res = levels[0]
+    for r in levels:
+        if counts[r] <= AUTO_TARGET_CELLS:
+            res = r
+    res = min(res + detail, int(entry["max_resolution"]))
+    while res > levels[0] and counts[res] > MAX_CELLS_LIMIT:
+        res -= 1
+    return res
+
+
+def country_overview_finest(entry: dict) -> int | None:
+    """The finest level a country's overview holds, or None if it is too small to have one."""
+    if entry["bytes"] < COUNTRY_OVERVIEW_MIN_BYTES:
+        return None
+    finest = max(country_resolution(entry, 1), COUNTRY_OVERVIEW_FINEST)
+    return min(finest, int(entry["max_resolution"]))
+
+
+def build_country_overview(entry: dict, root: Path) -> tuple[bytes, dict]:
+    """One big country's overview pack, gzipped, and its `overview` in the catalog (F-25)."""
+    finest = country_overview_finest(entry)
+    wanted = tuple(r for r in map(int, entry["cells_by_resolution"]) if r <= finest)
+    levels = merge([part_levels(root / p["url"], wanted) for p in entry["parts"]])
+    iso3 = entry["iso3"]
+    packed, part = overview_file(
+        iso3, entry["name"], entry["source"], levels, entry["total"], f"{iso3}.overview"
+    )
+    return packed, {**part, "max_resolution": finest}
+
+
+def write_country_overviews(out: Path, entries: dict[str, dict]) -> list[dict]:
+    """Write each big country's overview beside the packs and note it on the entry."""
+    found = []
+    for e in entries.values():
+        e.pop("overview", None)
+        enrich(e, out)
+        if country_overview_finest(e) is not None:
+            packed, e["overview"] = build_country_overview(e, out)
+            (out / e["overview"]["url"]).write_bytes(packed)
+            found.append(e)
     return found
 
 

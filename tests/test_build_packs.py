@@ -18,12 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from build_packs import (
     ALIGN,
+    COUNTRY_OVERVIEW_FINEST,
+    COUNTRY_OVERVIEW_MIN_BYTES,
     FORMAT,
     MAGIC,
     OVERVIEW_LEVELS,
     build_country,
+    build_country_overview,
     build_overview,
     coarse_parent,
+    country_overview_finest,
     data_version,
     decode,
     encode,
@@ -36,6 +40,7 @@ from build_packs import (
     unpack,
     whole_people,
     write_catalog,
+    write_country_overviews,
 )
 
 from ingest.pyramid import rollup
@@ -376,3 +381,62 @@ def test_overview_is_the_same_file_each_build(tmp_path):
     assert (
         build_overview("Asia", members, tmp_path)[0] == build_overview("Asia", members, tmp_path)[0]
     )
+
+
+def _big_country(tmp_path):
+    """A country in several parts, its files on disk, and every level the parts hold."""
+    files, entry = build(BRA, max_part_mb=0.003)
+    assert len(files) > 1
+    for part, packed in zip(entry["parts"], files, strict=True):
+        (tmp_path / part["url"]).write_bytes(packed)
+    entry["area_km2"] = 100.0
+    return entry, merge(
+        [{r: (c, p.astype(np.float64)) for r, (c, p) in read(f)[1].items()} for f in files]
+    )
+
+
+def test_country_overview_holds_what_its_parts_hold(tmp_path):
+    entry, levels = _big_country(tmp_path)
+    entry["bytes"] = COUNTRY_OVERVIEW_MIN_BYTES
+    packed, overview = build_country_overview(entry, tmp_path)
+    raw = gzip.decompress(packed)
+    header, start = unpack(raw)
+    held = decode(raw[start:], header["sections"])
+    assert overview["max_resolution"] == max(held)
+    assert max(held) == country_overview_finest(entry)
+    for res, (cells, pops) in held.items():
+        assert np.array_equal(cells, levels[res][0])
+        assert np.array_equal(pops, levels[res][1].astype("<f4"))
+    assert overview["url"].startswith("CMR.overview.")
+    assert "footprint" not in overview, "it is no part: it stands in for parts, whole"
+    assert overview["sha256"] == hashlib.sha256(packed).hexdigest()
+    assert build_country_overview(entry, tmp_path)[0] == packed, "the same file each build"
+
+
+def _levels_entry(counts, megabytes=5, max_res=9):
+    return {
+        "bytes": int(megabytes * 1e6),
+        "max_resolution": max_res,
+        "cells_by_resolution": {str(r): n for r, n in counts.items()},
+    }
+
+
+def test_country_overview_reaches_the_pickers_fine():
+    big = {3: 100, 4: 700, 5: 3000, 6: 20000, 7: 90000, 8: 200000, 9: 400000}
+    assert country_overview_finest(_levels_entry(big)) == COUNTRY_OVERVIEW_FINEST
+    dense = {3: 10, 4: 60, 5: 400, 6: 3000, 7: 20000, 8: 90000, 9: 300000}
+    assert country_overview_finest(_levels_entry(dense)) == 7  # Normal 6, Fine 7
+    sparse = {3: 3, 4: 8, 5: 20}
+    assert country_overview_finest(_levels_entry(sparse, max_res=5)) == 5, "never past the data"
+
+
+def test_small_countries_have_no_overview(tmp_path):
+    entry, _ = _big_country(tmp_path)
+    assert entry["bytes"] < COUNTRY_OVERVIEW_MIN_BYTES
+    assert country_overview_finest(entry) is None
+    assert write_country_overviews(tmp_path, {"CMR": entry}) == []
+    assert "overview" not in entry
+
+    entry["bytes"] = COUNTRY_OVERVIEW_MIN_BYTES
+    assert write_country_overviews(tmp_path, {"CMR": entry}) == [entry]
+    assert (tmp_path / entry["overview"]["url"]).exists()

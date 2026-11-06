@@ -17,7 +17,8 @@
  * Memory: only the one resolution a query reads is kept from each part, and only up to
  * MEMORY_BUDGET (see there). country() answers for a whole country straight from its
  * packs, with no outline: the country picker in app.js. A continent takes the same path, from
- * one small overview pack holding only its coarse levels (F-33).
+ * one small overview pack holding only its coarse levels (F-33). A big country has an overview
+ * too, which stands in for its parts at those levels, for a drawn shape as well (F-25).
  *
  * A deploy that rebuilds a country renames its pack files (they are named by content), so
  * a page loaded before it asks for files that are gone. A 404 on a pack makes a query read
@@ -52,9 +53,12 @@ const TallyStatic = (() => {
   let catalogBase = null;
   const byRoot = new Map(); // res-3 cell -> parts whose footprint holds it
   const parts = new Map(); // url -> part (catalog entry plus iso3, name, maxRes)
-  // A continent's overview pack (F-33). Not in `parts` or `byRoot`: a drawn shape must never
-  // read one, or it would count the same people twice.
+  // Overview packs, coarse levels only (F-33, F-25). Not in `parts` or `byRoot`: a continent's
+  // must never be read for a drawn shape, or it would count the same people twice.
   const overviews = new Map();
+  // A big country's overview, by iso3. It holds exactly what the country's parts hold at its
+  // levels, so it may stand in for them, all of them or none: see standIns().
+  const countryOverviews = new Map();
   const tables = new Map(); // `${url}|${res}` -> {hi, lo, pop, bytes}, least recently used first
   let tableBytes = 0;
   const pendingTables = new Map(); // `${url}|${res}` -> Promise<table>, while loading
@@ -315,9 +319,54 @@ const TallyStatic = (() => {
     return pendingTables.get(key);
   }
 
-  // Fetch the parts' tables at `res`, reporting downloads as { received, total, names }.
-  // Returns the tables by url and the parts that failed, with their errors.
+  // Which of these parts an overview should stand in for at `res`, as part url -> overview:
+  // a country's whenever it holds the level and costs less to get than the parts still missing.
+  // So a shape over Delhi reads India's overview only at a level the overview has, and a
+  // country saved for offline use keeps reading its own parts, with nothing to download.
+  async function standIns(needed, res) {
+    const out = new Map();
+    const usable = needed.filter((p) => countryOverviews.get(p.iso3)?.maxRes >= res);
+    if (!usable.length) return out;
+    const have = new Set(await storedKeys());
+    const owed = (p) => (have.has(p.url) || tables.has(`${p.url}|${res}`) ? 0 : p.bytes);
+    for (const iso3 of new Set(usable.map((p) => p.iso3))) {
+      const o = countryOverviews.get(iso3);
+      const own = usable.filter((p) => p.iso3 === iso3);
+      if (owed(o) < own.reduce((a, p) => a + owed(p), 0)) for (const p of own) out.set(p.url, o);
+    }
+    return out;
+  }
+
+  // The parts' tables at `res`, by part url, reporting downloads as { received, total, names },
+  // and the parts that failed, with their errors. Parts an overview stands in for all get its
+  // one table, so count a table once, not once per part. An overview that cannot be had falls
+  // back on the parts: with no connection, some of them may be saved here.
   async function gather(needed, res, onProgress) {
+    const standing = await standIns(needed, res);
+    const read = await readTables([...new Set(needed.map((p) => standing.get(p.url) ?? p))], res, onProgress);
+    const stoodIn = new Set(standing.values());
+    let failed = read.failed.filter((f) => !stoodIn.has(f.part));
+    const lost = new Set(read.failed.filter((f) => stoodIn.has(f.part)).map((f) => f.part));
+    const instead = needed.filter((p) => lost.has(standing.get(p.url)));
+    let parts = new Map();
+    if (instead.length && !read.failed.some((f) => isGone(f.error))) {
+      const again = await readTables(instead, res, onProgress);
+      parts = again.got;
+      failed = [...failed, ...again.failed];
+    }
+    const got = new Map();
+    for (const p of needed) {
+      const table = read.got.get(standing.get(p.url)?.url ?? p.url) ?? parts.get(p.url);
+      if (table) got.set(p.url, table);
+    }
+    // A renamed pack is not "missing": the caller reads the catalog again and retries.
+    const gone = [...read.failed, ...failed].find((f) => isGone(f.error));
+    if (gone) throw gone.error;
+    if (failed.length && !got.size) throw failed[0].error;
+    return { got, failed };
+  }
+
+  async function readTables(needed, res, onProgress) {
     const fetching = new Map(); // url -> bytes received so far
     const report = () => {
       const going = needed.filter((p) => fetching.has(p.url));
@@ -342,10 +391,6 @@ const TallyStatic = (() => {
       if (s.status === "fulfilled") got.set(needed[i].url, s.value);
       else failed.push({ part: needed[i], error: s.reason });
     });
-    // A renamed pack is not "missing": the caller reads the catalog again and retries.
-    const gone = failed.find((f) => isGone(f.error));
-    if (gone) throw gone.error;
-    if (failed.length && !got.size) throw failed[0].error;
     return { got, failed };
   }
 
@@ -385,6 +430,7 @@ const TallyStatic = (() => {
     catalog = c;
     parts.clear();
     overviews.clear();
+    countryOverviews.clear();
     byRoot.clear();
     for (const country of catalog.countries) {
       for (const p of country.parts) {
@@ -400,6 +446,17 @@ const TallyStatic = (() => {
           if (!byRoot.has(root)) byRoot.set(root, []);
           byRoot.get(root).push(part);
         }
+      }
+      if (country.overview) {
+        const o = {
+          ...country.overview,
+          iso3: country.iso3,
+          name: country.name,
+          maxRes: country.overview.max_resolution,
+          source: country.source,
+        };
+        overviews.set(o.url, o);
+        countryOverviews.set(o.iso3, o);
       }
     }
     for (const c of catalog.continents ?? [])
@@ -424,7 +481,9 @@ const TallyStatic = (() => {
     await load(dataUrl());
     const fresh = await readCatalog(dataUrl());
     const names = (c) =>
-      [...c.countries, ...(c.continents ?? [])].flatMap((x) => x.parts.map((p) => p.url)).join(" ");
+      [...c.countries, ...(c.continents ?? [])]
+        .flatMap((x) => [...x.parts, ...(x.overview ? [x.overview] : [])].map((p) => p.url))
+        .join(" ");
     const changed = fresh.m.built !== manifest.built || names(fresh.c) !== names(catalog);
     if (changed) {
       install(fresh);
@@ -665,6 +724,8 @@ const TallyStatic = (() => {
   async function removeCountry(iso3) {
     await ready;
     const urls = [...parts.values()].filter((p) => p.iso3 === iso3).map((p) => p.url);
+    const overview = countryOverviews.get(iso3);
+    if (overview) urls.push(overview.url);
     urls.forEach(forget);
     await idb("readwrite", (s) => urls.forEach((u) => s.delete(u)));
   }
@@ -710,7 +771,7 @@ const TallyStatic = (() => {
     const { got, failed } = await gather(needed, resolution, onProgress);
     const out = [];
     let total = 0;
-    for (const t of got.values())
+    for (const t of new Set(got.values()))
       for (let i = 0; i < t.pop.length; i++) {
         out.push({ h3: toHex(t.hi[i], t.lo[i]), population: t.pop[i] });
         total += t.pop[i];
