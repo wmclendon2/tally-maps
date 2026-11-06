@@ -59,7 +59,8 @@ Read it before changing the pipeline, the pack format or the resolver.
   be read stops it and is named (`files.read`).
 - Tally reads its own saved files back (F-41, `savedRow` in files.js, on `counted_with`): a circle
   by `latitude`/`longitude`/`radius_km`, while its outline still fits them (else the outline wins);
-  `drawn` means Tally named the row, so it is named afresh; `country_code` picks a whole country
+  `drawn` means Tally named the row, and `auto_named` that a file gave it no name and Tally numbered it,
+  so either is named afresh in today's language; `country_code` picks a whole country
   or continent again. Its columns are not carried as the file's own. A new saved column goes in
   `OWN_COLUMNS`. Files saved before these columns still open (`OLD_SHAPE_TITLES`).
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
@@ -75,7 +76,9 @@ Read it before changing the pipeline, the pack format or the resolver.
   its levels (`browser_countries.py` compares them on real data), so it may answer drawn shapes:
   `standIns` in static.js swaps it for all of a country's parts or none, never both, and only
   when it costs fewer bytes than the parts still missing, so a saved country reads its parts.
-  `build_static.py` writes them, so they change no country's pack.
+  `build_static.py` writes them, so they change no country's pack. The catalog listing one the host
+  does not serve only costs the parts (`notServed`). Every record in `tally-packs` shows in the ? panel
+  and Remove deletes it: a kept overview (`overviewBytes`, `savedContinents`) counts too.
 - Pack format: a format **major** bump makes old readers refuse a pack; additive changes
   bump the minor. Packs are named by content hash; `write_catalog` adds `continent`,
   `cells_by_resolution` and `area_km2` at write time, so those need no pack rebuild.

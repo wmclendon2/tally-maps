@@ -59,6 +59,9 @@ const TallyStatic = (() => {
   // A big country's overview, by iso3. It holds exactly what the country's parts hold at its
   // levels, so it may stand in for them, all of them or none: see standIns().
   const countryOverviews = new Map();
+  // Overviews the catalog listed and the host answered "gone" for. Names mean one content, so
+  // these stay out of standIns for as long as the page is open.
+  const notServed = new Set();
   const tables = new Map(); // `${url}|${res}` -> {hi, lo, pop, bytes}, least recently used first
   let tableBytes = 0;
   const pendingTables = new Map(); // `${url}|${res}` -> Promise<table>, while loading
@@ -325,9 +328,19 @@ const TallyStatic = (() => {
   // country saved for offline use keeps reading its own parts, with nothing to download.
   async function standIns(needed, res) {
     const out = new Map();
-    const usable = needed.filter((p) => countryOverviews.get(p.iso3)?.maxRes >= res);
+    const usable = needed.filter((p) => {
+      const o = countryOverviews.get(p.iso3);
+      return o?.maxRes >= res && !notServed.has(o.url);
+    });
     if (!usable.length) return out;
-    const have = new Set(await storedKeys());
+    // Only a guess at what is cheapest, so storage failing must not stop the count: fileFor
+    // goes on to download what it cannot read.
+    const have = new Set(
+      await storedKeys().catch((err) => {
+        console.warn("could not read stored data:", err);
+        return [];
+      }),
+    );
     const owed = (p) => (have.has(p.url) || tables.has(`${p.url}|${res}`) ? 0 : p.bytes);
     for (const iso3 of new Set(usable.map((p) => p.iso3))) {
       const o = countryOverviews.get(iso3);
@@ -340,11 +353,14 @@ const TallyStatic = (() => {
   // The parts' tables at `res`, by part url, reporting downloads as { received, total, names },
   // and the parts that failed, with their errors. Parts an overview stands in for all get its
   // one table, so count a table once, not once per part. An overview that cannot be had falls
-  // back on the parts: with no connection, some of them may be saved here.
+  // back on the parts: with no connection, some of them may be saved here. One the host says
+  // is gone may just have been renamed, so that goes to withFreshCatalog like any gone pack;
+  // it comes back here, in notServed, if the catalog still lists it.
   async function gather(needed, res, onProgress) {
     const standing = await standIns(needed, res);
     const read = await readTables([...new Set(needed.map((p) => standing.get(p.url) ?? p))], res, onProgress);
     const stoodIn = new Set(standing.values());
+    for (const f of read.failed) if (stoodIn.has(f.part) && isGone(f.error)) notServed.add(f.part.url);
     let failed = read.failed.filter((f) => !stoodIn.has(f.part));
     const lost = new Set(read.failed.filter((f) => stoodIn.has(f.part)).map((f) => f.part));
     const instead = needed.filter((p) => lost.has(standing.get(p.url)));
@@ -360,7 +376,7 @@ const TallyStatic = (() => {
       if (table) got.set(p.url, table);
     }
     // A renamed pack is not "missing": the caller reads the catalog again and retries.
-    const gone = [...read.failed, ...failed].find((f) => isGone(f.error));
+    const gone = [...failed, ...read.failed].find((f) => isGone(f.error));
     if (gone) throw gone.error;
     if (failed.length && !got.size) throw failed[0].error;
     return { got, failed };
@@ -506,7 +522,8 @@ const TallyStatic = (() => {
       } catch (_) {
         throw new DataUpdatedError();
       }
-      if (!changed)
+      // The catalog stands and only an overview is missing: the retry reads the parts.
+      if (!changed && !notServed.has(err.part.url))
         throw new DataUpdatedError(
           `Could not download ${err.part.name} data. Reload to try again.`,
           "err.downloadReload",
@@ -693,8 +710,23 @@ const TallyStatic = (() => {
         parts: c.parts.length,
         savedParts: saved.length,
         savedBytes: saved.reduce((a, p) => a + p.bytes, 0),
+        // Kept when it was read, not asked for, and not one of the parts above.
+        overviewBytes: have.has(countryOverviews.get(c.iso3)?.url) ? countryOverviews.get(c.iso3).bytes : 0,
       };
     });
+  }
+
+  // The continents whose overview this browser holds: { key, iso3, bytes }.
+  async function savedContinents() {
+    await ready;
+    const have = new Set(await storedKeys());
+    return (catalog.continents ?? [])
+      .map((c) => ({
+        key: c.key,
+        iso3: c.iso3,
+        bytes: c.parts.filter((p) => have.has(p.url)).reduce((a, p) => a + p.bytes, 0),
+      }))
+      .filter((c) => c.bytes);
   }
 
   // Saving only stores the files (checked against their hashes); nothing is unpacked
@@ -723,9 +755,8 @@ const TallyStatic = (() => {
 
   async function removeCountry(iso3) {
     await ready;
-    const urls = [...parts.values()].filter((p) => p.iso3 === iso3).map((p) => p.url);
-    const overview = countryOverviews.get(iso3);
-    if (overview) urls.push(overview.url);
+    // Its parts and its overview; a continent ("continent:Africa") has only an overview.
+    const urls = [...parts.values(), ...overviews.values()].filter((p) => p.iso3 === iso3).map((p) => p.url);
     urls.forEach(forget);
     await idb("readwrite", (s) => urls.forEach((u) => s.delete(u)));
   }
@@ -817,5 +848,5 @@ const TallyStatic = (() => {
   // back); fires "tally:data-updated" when it has. Quietly false offline.
   const checkForUpdate = () => refresh().catch(() => false);
 
-  return { load, query, country, countries, continents, saveCountry, removeCountry, memory, checkForUpdate };
+  return { load, query, country, countries, continents, savedContinents, saveCountry, removeCountry, memory, checkForUpdate };
 })();

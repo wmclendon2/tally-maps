@@ -155,6 +155,25 @@ DROP_STORED = """(urls) => new Promise((resolve, reject) => {
 })"""
 
 
+SAVED_ROW = """async (c) => {
+    const row = (await TallyStatic.countries()).find((x) => x.iso3 === c);
+    return {overviewBytes: row.overviewBytes, savedParts: row.savedParts};
+}"""
+
+
+# Draw the ? panel, press Remove on the first row saying `words`; what that row said, or null.
+CLICK_REMOVE = """async (words) => {
+    await renderSaved();
+    const row = [...document.querySelectorAll('#saved-list .saved-list li')]
+        .find((li) => li.textContent.includes(words));
+    const button = [...(row?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Remove');
+    if (!button) return null;
+    const said = row.textContent;
+    button.click();
+    return said;
+}"""
+
+
 def box(w, s, e, n):
     return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
 
@@ -203,6 +222,47 @@ def overview_checks(page, entry: dict, errors: list[str]) -> None:
         got = whole()
         if fetched != [overview["url"]] or got["total"] != entry["total"]:
             errors.append(f"{iso3} from nothing read {fetched}, total {got['total']}")
+
+        # Kept by that read, so the ? panel says so and Remove takes it away.
+        saved = page.evaluate(SAVED_ROW, iso3)
+        if not (saved["overviewBytes"] == overview["bytes"] and not saved["savedParts"]):
+            errors.append(f"{iso3}'s kept overview is not listed: {saved}")
+        said = page.evaluate(CLICK_REMOVE, "Overview saved")
+        if not said:
+            errors.append(f"the ? panel has no Remove for {iso3}'s overview")
+        page.wait_for_function(
+            """async (c) => (await TallyStatic.countries()).find((x) => x.iso3 === c).overviewBytes === 0""",
+            arg=iso3,
+        )
+
+        # Storage that opens and then fails is only a missing shortcut: the count still comes.
+        fresh()
+        page.evaluate(
+            """() => {
+                window.realTransaction = IDBDatabase.prototype.transaction;
+                IDBDatabase.prototype.transaction = () => { throw new Error("connection lost"); };
+            }"""
+        )
+        got = whole()
+        page.evaluate("() => { IDBDatabase.prototype.transaction = window.realTransaction; }")
+        if got["missing"] or got["total"] != entry["total"]:
+            errors.append(f"{iso3} with storage failing: {got}")
+
+        # The catalog lists an overview the host does not serve: the parts answer, and no
+        # "reload" that could never help.
+        page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
+        fresh()
+        missing = f"**/{overview['url']}"
+        page.route(missing, lambda route: route.fulfill(status=404))
+        try:
+            got = whole()
+            parts = {p["url"] for p in entry["parts"]}
+            if got["total"] != entry["total"] or got["missing"] or not parts <= set(fetched):
+                errors.append(f"{iso3} with its overview gone: {got}, read {fetched}")
+        finally:
+            page.unroute(missing)
+        page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
+        fresh()
 
         # A box over the whole country, read from the overview, then from the parts alone.
         shape = box(*entry["bbox"])
@@ -330,6 +390,14 @@ def run_browser(
                 "async ([g, d]) => (await TallyStatic.query(g, d)).total", list(again[1])
             ):
                 errors.append(f"{again[0]} changed after reading the continents")
+            # The ? panel lists a continent's kept overview, and Remove takes it away.
+            key = whole[0].split(":", 1)[1]
+            if not page.evaluate(CLICK_REMOVE, f"All of {key}"):
+                errors.append(f"the ? panel has no Remove for {whole[0]}")
+            page.wait_for_function(
+                "async (k) => !(await TallyStatic.savedContinents()).some((c) => c.key === k)",
+                arg=key,
+            )
         if overview_entry:
             overview_checks(page, overview_entry, errors)
         browser.close()

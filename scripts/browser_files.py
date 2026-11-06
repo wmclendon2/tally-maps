@@ -526,6 +526,234 @@ def round_trip(page, where: Path, check: Check) -> None:
     check("an older file: no doubled words", "Population" not in shown["caption"], shown)
 
 
+def small_things(page, where: Path, paths: dict[str, Path], check: Check) -> None:
+    """Things the first code review found: each once went wrong in a way no count would show."""
+    console.print("[bold]A name that is a formula[/bold]")
+    formula = where / "formula.geojson"
+    name = '=HYPERLINK("http://example.com","x")'
+    formula.write_text(
+        json.dumps(
+            {
+                "type": "Feature",
+                "properties": {"name": name},
+                "geometry": {"type": "Polygon", "coordinates": box(11.45, 3.8, 11.6, 3.95)},
+            }
+        )
+    )
+    shown_row(page, formula)
+    saved = save(page, "#export-csv", where / "formula_count.csv")
+    row = next(csv.DictReader(io.StringIO(saved.read_text(encoding="utf-8-sig"))))
+    check("a single count's CSV keeps it from running", row["name"] == f"'{name}", row["name"])
+
+    console.print("[bold]Rows Tally numbers[/bold]")
+    points = where / "multipoint.geojson"
+
+    def feature(geometry: dict) -> dict:
+        return {"type": "Feature", "properties": {}, "geometry": geometry}
+
+    points.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    feature(
+                        {
+                            "type": "MultiPoint",
+                            "coordinates": [[11.5, 3.9], [9.7, 4.0], [13.4, 9.3]],
+                        }
+                    ),
+                    feature({"type": "Point", "coordinates": [14.3, 10.6]}),
+                ],
+            }
+        )
+    )
+    open_file(page, points)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("no two rows share a number", names == [f"Point {n}" for n in (1, 2, 3, 4)], names)
+
+    console.print("[bold]Framing a list[/bold]")
+
+    def west_east(*points: tuple[float, float]) -> list[float]:
+        path = where / "spread.csv"
+        path.write_text(
+            "latitude,longitude,radius_km\n" + "".join(f"{a},{o},5\n" for a, o in points)
+        )
+        open_file(page, path)
+        bounds = page.evaluate("fileBounds()")
+        return [bounds[0][0], bounds[1][0]]
+
+    west, east = west_east((19.4, -99.1), (9.1, 7.5), (-6.2, 106.8))
+    check(
+        "Mexico to Indonesia stays the short way",
+        -100 < west < -98 and 106 < east < 108,
+        [west, east],
+    )
+    west, east = west_east((-17.7, 178.4), (-16.8, -179.9))
+    check("Fiji's two sides of 180° come together", east - west < 5, [west, east])
+    wide = where / "wide.geojson"
+    wide.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    # In short edges: one wider than 180° would mean the way across the 180° line.
+                    feature(
+                        {
+                            "type": "Polygon",
+                            "coordinates": [
+                                [
+                                    [-100, 0],
+                                    [0, 0],
+                                    [100, 0],
+                                    [100, 10],
+                                    [0, 10],
+                                    [-100, 10],
+                                    [-100, 0],
+                                ]
+                            ],
+                        }
+                    ),
+                    feature({"type": "Point", "coordinates": [150, 5]}),
+                ],
+            }
+        )
+    )
+    open_file(page, wide)
+    west, east = page.evaluate("(() => { const b = fileBounds(); return [b[0][0], b[1][0]]; })()")
+    check("a wide shape is not cut in two", west == -100 and 150 < east < 151, [west, east])
+
+    console.print("[bold]A zip that unpacks large[/bold]")
+    big = where / "big_shp.zip"
+    big.write_bytes(
+        zipped({**shapefile([("Yaounde", YAOUNDE[0])]), "zones.sbn": bytes(65_000_000)})
+    )
+    check("the zip itself is small", big.stat().st_size < 1_000_000, big.stat().st_size)
+    said = refused(page, big)
+    check("refused by what it unpacks to, before reading it", "unzips to 66 MB" in said, said)
+    check("and the Shapefile reader never ran", page.evaluate("() => !fileSet"), said)
+
+
+def saved_labels(browser, url: str, page, where: Path, check: Check) -> None:
+    """A label Tally gave a row with no name is said afresh when its saved file is opened."""
+    console.print("[bold]Labels Tally gave[/bold]")
+
+    def feature(geometry: dict, **props) -> dict:
+        return {"type": "Feature", "properties": props, "geometry": geometry}
+
+    shape = {"type": "Polygon", "coordinates": box(11.45, 3.8, 11.6, 3.95)}
+    point = {"type": "Point", "coordinates": [9.7, 4.0]}
+    unnamed = where / "no_names.geojson"
+    unnamed.write_text(
+        json.dumps({"type": "FeatureCollection", "features": [feature(shape), feature(point)]})
+    )
+    named = where / "with_names.geojson"
+    named.write_text(json.dumps(feature(shape, name="Forme 1")))
+
+    # Saved in French...
+    context = browser.new_context(
+        service_workers="block",
+        accept_downloads=True,
+        locale="fr-FR",
+        viewport={"width": 1280, "height": 800},
+    )
+    fr = context.new_page()
+    fr.route("**/static.cloudflareinsights.com/**", lambda route: route.abort())
+    fr.route("**/cdn-cgi/rum*", lambda route: route.abort())
+    fr.goto(url)
+    fr.wait_for_function("typeof TallyFiles !== 'undefined' && map.getLayer('file-fill')")
+    fr.click("#tab-file")
+    open_file(fr, unnamed)
+    as_geojson = save(fr, "#file-geojson", where / "saved_fr.geojson")
+    as_csv = save(fr, "#file-csv", where / "saved_fr.csv")
+    shown_row(fr, named)
+    named_fr = save(fr, "#export-geojson", where / "named_fr.geojson")
+    one_row = where / "one_row.geojson"
+    one_row.write_text(json.dumps(feature(shape)))
+    shown_row(fr, one_row)
+    one_saved = save(fr, "#export-geojson", where / "one_saved_fr.geojson")
+    context.close()
+
+    rows = list(csv.DictReader(io.StringIO(as_csv.read_text("utf-8-sig"))))
+    check("the file still shows Tally's label", rows[0]["name"] == "Forme 1", rows[0]["name"])
+    check("and says Tally gave it", [r["auto_named"] for r in rows] == ["true", "true"], rows)
+    props = json.loads(as_geojson.read_text())["features"][0]["properties"]
+    check("GeoJSON too", props["name"] == "Forme 1" and props["auto_named"] is True, props)
+    props = json.loads(named_fr.read_text())["features"][0]["properties"]
+    check("a name of the file's own has no marker", "auto_named" not in props, props)
+
+    # ... opened in English.
+    open_file(page, as_geojson)
+    facts = page.evaluate(FACTS_JS)
+    names = [r["name"] for r in facts]
+    check("GeoJSON: said afresh", names == ["Shape 1", "Point 2"], names)
+    check(
+        "and the marker is not the file's own column", all(r["props"] == {} for r in facts), facts
+    )
+    open_file(page, as_csv)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("CSV: said afresh, a shape still a shape", names == ["Shape 1", "Point 2"], names)
+    shown_row(page, one_saved)
+    name = page.evaluate(FACTS_JS)[0]["name"]
+    check("one count's GeoJSON: said afresh", name == "Shape 1", name)
+    label = page.evaluate("countFileLabel()")
+    check("and leaves the old label out of the file's name", label == "shape", label)
+    open_file(page, named_fr)
+    name = page.evaluate(FACTS_JS)[0]["name"]
+    check("a real name that looks like a label stays", name == "Forme 1", name)
+    open_file(page, unnamed, as_geojson)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check(
+        "opened with another file: numbered through, none twice",
+        names == ["Shape 1", "Point 2", "Shape 3", "Point 4"],
+        names,
+    )
+    resaved = save(page, "#file-geojson", where / "resaved.geojson")
+    open_file(page, resaved)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("and again once saved", names == ["Shape 1", "Point 2", "Shape 3", "Point 4"], names)
+
+    older = json.loads(as_geojson.read_text())
+    for f in older["features"]:
+        del f["properties"]["auto_named"]
+    before = where / "before_marker.geojson"
+    before.write_text(json.dumps(older))
+    open_file(page, before)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("a file saved before the marker still opens", names[0] == "Forme 1", names)
+
+    # A file's own column of that name is not taken for ours, whoever wrote it.
+    theirs = where / "theirs.csv"
+    theirs.write_text(
+        "name,latitude,longitude,radius_km,auto_named\nClinic,3.9,11.5,2,true\nFarm,4.0,9.7,2,no\n"
+    )
+    open_file(page, theirs)
+    saved = save(page, "#file-csv", where / "theirs_saved.csv")
+    row = next(csv.DictReader(io.StringIO(saved.read_text("utf-8-sig"))))
+    check(
+        "their column moves aside",
+        row.get("file_auto_named") == "true" and "auto_named" not in row,
+        row,
+    )
+    open_file(page, saved)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("and their names stay", names == ["Clinic", "Farm"], names)
+
+
+def words_late(browser, url: str, check: Check) -> None:
+    """A button's own words stay until the language file comes, or if it never does."""
+    context = browser.new_context(service_workers="block", locale="en-US")
+    page = context.new_page()
+    page.route("**/i18n/en.json*", lambda route: route.abort())
+    page.route("**/static.cloudflareinsights.com/**", lambda route: route.abort())
+    page.route("**/cdn-cgi/rum*", lambda route: route.abort())
+    page.goto(url)
+    page.wait_for_function("typeof setPicking === 'function' && TallyI18n.ready")
+    page.evaluate("TallyI18n.ready")
+    label = page.text_content("#pick-label")
+    check("Pick a point keeps its words with no language file", label == "Pick a point", label)
+    context.close()
+
+
 def several_files(page, where: Path, paths: dict[str, Path], check: Check) -> None:
     """Everything picked makes one list, or the file that stopped it is named."""
     console.print("[bold]Several files at once[/bold]")
@@ -757,6 +985,8 @@ def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> Non
         check("a single count's file is one row, not its hexagons", len(single) == 1, len(single))
         round_trip(page, again.parent, check)
         several_files(page, again.parent, paths, check)
+        small_things(page, again.parent, paths, check)
+        saved_labels(browser, url, page, again.parent, check)
 
         console.print("[bold]Other formats[/bold]")
         rows = open_file(page, paths["zones.kml"])
@@ -937,6 +1167,7 @@ def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> Non
         metrics = {m["name"]: m["value"] for m in session.send("Performance.getMetrics")["metrics"]}
         mb = metrics["JSHeapUsedSize"] / 1e6
         check(f"page memory after: {mb:.0f} MB", mb < TALLY_500_MB, mb)
+        words_late(browser, url, check)
         browser.close()
     check("no page errors", not errors, errors)
 

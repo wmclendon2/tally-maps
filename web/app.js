@@ -811,9 +811,11 @@ function clearCircle() {
 }
 
 function setPicking(on) {
+  // Only on a change: at start-up the words may not be in yet, and the page's own are right.
+  if (on !== pickingPoint)
+    $("pick-label").textContent = t(on ? (TOUCH ? "pick.activeTouch" : "pick.active") : "pick.start");
   pickingPoint = on;
   $("pick-point").classList.toggle("active", on);
-  $("pick-label").textContent = t(on ? (TOUCH ? "pick.activeTouch" : "pick.active") : "pick.start");
   map.getCanvas().style.cursor = on ? "crosshair" : "";
   if (on && draw && draw.getMode() === "polygon") {
     draw.setMode("static");
@@ -1017,14 +1019,17 @@ async function renderSaved() {
   $("saved").hidden = false;
   const list = $("saved-list");
   try {
-    const groups = byContinent(await TallyStatic.countries());
-    list.replaceChildren(...[...groups].map(([k, countries]) => continentGroup(k, countries)));
+    const [countries, continents] = await Promise.all([TallyStatic.countries(), TallyStatic.savedContinents()]);
+    const groups = byContinent(countries);
+    const overview = (k) => continents.find((c) => c.key === k);
+    list.replaceChildren(...[...groups].map(([k, inIt]) => continentGroup(k, inIt, overview(k))));
   } catch (err) {
     list.textContent = t("saved.readFailed", { error: errText(err) });
   }
 }
 
-function continentGroup(continent, countries) {
+// `overview`: the continent's own pack, when a count of all of it left one in this browser.
+function continentGroup(continent, countries, overview) {
   const li = document.createElement("li");
   li.className = "continent";
   const details = document.createElement("details");
@@ -1041,13 +1046,14 @@ function continentGroup(continent, countries) {
   state.className = "saved-state";
   const bytes = countries.reduce((a, c) => a + c.bytes, 0);
   const savedBytes = countries.reduce((a, c) => a + c.savedBytes, 0);
+  const storedBytes = countries.reduce((a, c) => a + c.savedBytes + c.overviewBytes, overview?.bytes ?? 0);
   const full = countries.filter((c) => c.savedParts === c.parts).length;
   const n = countries.length;
   state.textContent =
     savingContinent === continent
       ? t("saved.downloading")
       : full === n
-        ? t("saved.groupAll", { n, mb: fmtMB(savedBytes) })
+        ? t("saved.groupAll", { n, mb: fmtMB(storedBytes) })
         : t("saved.groupSome", { n, saved: full, mb: fmtMB(bytes - savedBytes) });
   summary.append(textBlock(name, state));
 
@@ -1097,13 +1103,26 @@ function continentGroup(continent, countries) {
         savingContinent = null;
       }
     });
-  if (savedBytes)
+  if (storedBytes)
     action(t("saved.removeAll"), async () => {
-      for (const c of countries) if (c.savedParts) await TallyStatic.removeCountry(c.iso3);
+      for (const c of countries) if (c.savedParts || c.overviewBytes) await TallyStatic.removeCountry(c.iso3);
+      if (overview) await TallyStatic.removeCountry(overview.iso3);
     });
 
   const rows = document.createElement("ul");
   rows.className = "saved-list";
+  // A continent's overview has no parts of its own to save, so it only ever says Saved.
+  if (overview)
+    rows.append(
+      savedRow({
+        iso3: overview.iso3,
+        shownName: t("continent.all", { continent: continentName(continent) }),
+        parts: 0,
+        savedParts: 0,
+        savedBytes: 0,
+        overviewBytes: overview.bytes,
+      }),
+    );
   rows.append(...countries.map(savedRow));
   details.append(summary, rows);
   li.append(details);
@@ -1127,10 +1146,12 @@ function savedRow(c) {
   state.className = "saved-state";
   const full = c.savedParts === c.parts;
   state.textContent = full
-    ? t("saved.full", { mb: fmtMB(c.savedBytes) })
+    ? t("saved.full", { mb: fmtMB(c.savedBytes + c.overviewBytes) })
     : c.savedParts
       ? t("saved.partly", { got: fmtMB(c.savedBytes), total: fmtMB(c.bytes) })
-      : t("saved.none", { mb: fmtMB(c.bytes) });
+      : c.overviewBytes
+        ? t("saved.overview", { got: fmtMB(c.overviewBytes), total: fmtMB(c.bytes) })
+        : t("saved.none", { mb: fmtMB(c.bytes) });
   li.append(textBlock(name, state));
 
   const action = (label, run) => {
@@ -1157,7 +1178,7 @@ function savedRow(c) {
         state.textContent = t("saved.progress", { got: fmtMB(received), total: fmtMB(total) });
       }),
     );
-  if (c.savedParts) action(t("saved.remove"), () => TallyStatic.removeCountry(c.iso3));
+  if (c.savedParts || c.overviewBytes) action(t("saved.remove"), () => TallyStatic.removeCountry(c.iso3));
   return li;
 }
 
@@ -1531,7 +1552,7 @@ function render(res) {
   $("panel").classList.add("has-result");
   // A total that leaves a country out must say so: it is a floor, not an answer.
   if (res.missing?.length) {
-    const left = res.missing_iso3?.map((c, i) => countryName(c, res.missing[i])) ?? res.missing;
+    const left = res.missing_iso3?.map((c, i) => placeName(c, res.missing[i])) ?? res.missing;
     setStatus(t("status.leftOut", { n: fmtInt(res.total), est: est(), names: listNames(left) }), true);
     return;
   }
@@ -1899,7 +1920,7 @@ const csvField = (v) => {
 function exportCsv() {
   if (!lastResult) return;
   const row = exportSummary(lastResult);
-  const lines = [Object.keys(row), Object.values(row)].map((r) => r.map(csvField).join(","));
+  const lines = [Object.keys(row), Object.values(row).map(safeCell)].map((r) => r.map(csvField).join(","));
   // The byte-order mark makes Excel read the file as UTF-8 (Côte d'Ivoire, km²).
   const blob = new Blob(["﻿" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
   setStatus(t("status.saved", { file: saveFile(blob, "csv", countFileLabel()) }));
@@ -1908,8 +1929,14 @@ function exportCsv() {
 // ~10 cm: enough for any hexagon or drawn vertex, and it keeps 40,000 cells to a few MB.
 const roundCoords = (c) => (typeof c[0] === "number" ? c.map((x) => round(x, 6)) : c.map(roundCoords));
 
-// What a saved count needs to come back as it was (F-41): a circle's center and radius, and
-// `drawn` when Tally named it rather than a person or a file. Unrounded, for the same count.
+// A row with no name of its own: the label in a saved file is only Tally's number for it.
+const autoNamed = (row) => row && !row.drawn && !row.name;
+// Columns a saved file reads back only when set, so a file's own column of that name moves aside.
+const MARKER_COLUMNS = ["drawn", "auto_named"];
+
+// What a saved count needs to come back as it was (F-41): a circle's center and radius,
+// `drawn` when Tally named it rather than a person or a file, and `auto_named` when a file
+// gave it no name and Tally numbered it. Unrounded, for the same count.
 function reopenColumns(res, row) {
   if (res.country) return { country_code: lastCountry };
   const circled = row?.center
@@ -1920,6 +1947,7 @@ function reopenColumns(res, row) {
   return {
     ...(circled && { latitude: circled[0][1], longitude: circled[0][0], radius_km: circled[1] }),
     ...((!row || row.drawn) && { drawn: true }),
+    ...(autoNamed(row) && { auto_named: true }),
   };
 }
 
@@ -2029,17 +2057,19 @@ function drawFileShapes() {
 }
 
 // The view that holds every row. Rows on both sides of the 180° line come together across
-// it, as cellsBounds does for hexagons, rather than stretching round the world.
+// it, as cellsBounds does for hexagons, rather than stretching round the world. Each box's
+// whole width counts as taken, every 10°, so the cut never falls inside a wide shape, and a
+// box moves as one.
 function fileBounds() {
   const boxes = fileSet.rows.map(rowGeometry).filter(Boolean).map(bboxOf);
   if (!boxes.length) return null;
-  const west = Math.min(...boxes.map((b) => b[0][0]));
-  const east = Math.max(...boxes.map((b) => b[1][0]));
-  const wrap = east - west > 180;
-  const across = (b) => (wrap && b[1][0] < 0 ? [b[0][0] + 360, b[1][0] + 360] : [b[0][0], b[1][0]]);
+  const inLine = lngsInLine(
+    boxes.flatMap(([[w], [e]]) => [e, ...Array.from({ length: Math.ceil((e - w) / 10) }, (_, i) => w + i * 10)]),
+  );
+  const spans = boxes.map(([[w], [e]]) => [inLine(w), inLine(w) - w + e]);
   return [
-    [Math.min(...boxes.map((b) => across(b)[0])), Math.min(...boxes.map((b) => b[0][1]))],
-    [Math.max(...boxes.map((b) => across(b)[1])), Math.max(...boxes.map((b) => b[1][1]))],
+    [Math.min(...spans.map((s) => s[0])), Math.min(...boxes.map((b) => b[0][1]))],
+    [Math.max(...spans.map((s) => s[1])), Math.max(...boxes.map((b) => b[1][1]))],
   ];
 }
 
@@ -2053,7 +2083,7 @@ function rowValue(row) {
   const r = row.result;
   if (!r) return { text: "–", note: "" };
   if (r.missing.length) {
-    const left = r.missing_iso3.map((c, i) => countryName(c, r.missing[i]));
+    const left = r.missing_iso3.map((c, i) => placeName(c, r.missing[i]));
     return {
       // Nothing downloaded is no count at all, not "at least 0".
       text: r.total ? t("file.atLeast", { n: fmtInt(r.total) }) : t("file.notCounted"),
@@ -2401,6 +2431,7 @@ function fileColumns(row) {
     summary.radius_km = round(row.radiusKm ?? fileSet.radiusKm, 6);
   }
   if (row.drawn) summary.drawn = true;
+  if (autoNamed(row)) summary.auto_named = true;
   return summary;
 }
 
@@ -2418,7 +2449,8 @@ const safeCell = (v) =>
 
 function exportFileCsv() {
   const ours = Object.keys(fileColumnKeys());
-  const rows = fileSet.rows.map((row) => ({ summary: fileColumns(row), own: ownColumns(row, new Set(ours)) }));
+  const taken = new Set([...ours, ...MARKER_COLUMNS]);
+  const rows = fileSet.rows.map((row) => ({ summary: fileColumns(row), own: ownColumns(row, taken) }));
   const keys = [...new Set([...ours, ...rows.flatMap((r) => Object.keys(r.own))])];
   const lines = [keys, ...rows.map((r) => keys.map((k) => safeCell((k in r.summary ? r.summary : r.own)[k])))];
   const text = lines.map((line) => line.map(csvField).join(",")).join("\r\n");
@@ -2439,6 +2471,7 @@ function fileColumnKeys() {
     longitude: "",
     radius_km: "",
     ...(fileSet.rows.some((r) => r.drawn) && { drawn: "" }),
+    ...(fileSet.rows.some(autoNamed) && { auto_named: "" }),
   };
 }
 
@@ -2447,7 +2480,7 @@ function fileColumnKeys() {
 function exportFileGeojson() {
   const taken = new Set(Object.keys(fileColumnKeys()));
   taken.add("population");
-  taken.add("drawn");
+  for (const k of MARKER_COLUMNS) taken.add(k);
   const features = fileSet.rows.map((row) => {
     const { population_estimate: population = null, ...summary } = fileColumns(row);
     const geometry = rowGeometry(row);

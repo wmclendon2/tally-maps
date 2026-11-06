@@ -187,7 +187,7 @@ const TallyFiles = (() => {
     "name", "kind", "country_iso3", "population", "population_estimate", "area_km2", "area_mi2",
     "density_per_km2", "density_per_mi2", "left_out", "source", "data_year", "h3_resolution",
     "hexagons", "counted_at", "counted_with", "note", "latitude", "longitude", "radius_km", "drawn",
-    "country_code",
+    "country_code", "auto_named",
   ]);
   const withoutOwn = (props) =>
     Object.fromEntries(Object.entries(props).filter(([k]) => !OWN_COLUMNS.has(k)));
@@ -223,6 +223,8 @@ const TallyFiles = (() => {
   // a count Tally named itself without that name, so it is said afresh.
   function savedRow(row, props) {
     if (props?.counted_with !== COUNTED_WITH) return row;
+    // Only Tally's number for a row with no name: it is numbered afresh, in today's language.
+    if (props.auto_named === true) row = { ...row, name: null };
     const out = { ...row, props: withoutOwn(props) };
     // A whole country or continent is saved with its hexagons and no outline: Tally picks it
     // again if it is all that was opened, and a list says where to find it.
@@ -285,6 +287,11 @@ const TallyFiles = (() => {
       if (own && props.drawn === "true") {
         row.drawn = true;
         row.name = null;
+      }
+      if (own && props.auto_named === "true") {
+        row.name = null;
+        // A shape has no coordinates in a CSV, so it stays a row that says so, and still a shape.
+        if (props.kind === "shape") row.fallback = ["file.unnamed", { n: i + 1 }];
       }
       const y = number(cells[lat]);
       const x = number(cells[lng]);
@@ -390,7 +397,7 @@ const TallyFiles = (() => {
     }
     if (parts.points.length) {
       return parts.points.map((p, n) => {
-        const row = { ...base, kind: "circle", fallback: ["file.unnamedPoint", { n: i + n + 1 }] };
+        const row = { ...base, kind: "circle", fallback: ["file.unnamedPoint", base.fallback[1]] };
         if (!Array.isArray(p) || !Number.isFinite(p[0]) || !Number.isFinite(p[1]))
           return { ...row, problem: { key: "file.problemBadPoint" } };
         if (Math.abs(p[1]) > 90 || Math.abs(p[0]) > 540)
@@ -445,6 +452,8 @@ const TallyFiles = (() => {
     // Every row's coordinates out of range is the file's coordinate system, not its rows.
     if (rows.length && rows.every((r) => r.problem?.key === "file.problemNotLatLng"))
       throw new FileProblem("file.errNotLatLng", { name });
+    // Down the list, as a MultiPoint makes several rows of one feature: no two "Point 2".
+    rows.forEach((row, i) => (row.fallback = [row.fallback[0], { n: i + 1 }]));
     return rows;
   }
 
@@ -483,6 +492,9 @@ const TallyFiles = (() => {
     if (!members) throw new FileProblem("file.errRead", { name });
     const of = (...exts) => members.filter((m) => exts.includes(extension(m.name)));
     if (of("shp").length) {
+      // shpjs unpacks every member at once, so the limit has to cover them all, before it does.
+      const size = members.reduce((sum, m) => sum + m.size, 0);
+      if (size > MAX_BYTES) throw new FileProblem("file.errTooBigUnzipped", tooBig(size, name));
       const shp = await library("shp");
       try {
         return fromFeatures(layersOf(await shp(buf)), name);
@@ -495,7 +507,7 @@ const TallyFiles = (() => {
     // A KMZ is a zip with a .kml inside; a zip may just as well hold any other format here.
     const inner = of("kml")[0] ?? of("geojson", "json")[0] ?? of("csv", "tsv")[0];
     if (!inner) throw new FileProblem("file.errZip", { name });
-    if (inner.size > MAX_BYTES) throw new FileProblem("file.errTooBig", tooBig(inner.size, name));
+    if (inner.size > MAX_BYTES) throw new FileProblem("file.errTooBigUnzipped", tooBig(inner.size, name));
     return fromBytes(inner.name, await inner.read(), name);
   }
 
