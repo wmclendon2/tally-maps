@@ -510,29 +510,33 @@ const TallyStatic = (() => {
 
   // Run `ask`; if a pack it needs has been renamed, read the catalog again and run it
   // once more. A second miss, or a 404 with nothing new in the catalog, ends in words a
-  // person can act on, never an HTTP status.
+  // person can act on, never an HTTP status. A missing overview only costs its parts, whatever
+  // happens to the catalog read: each one joins notServed, so these retries run out.
   async function withFreshCatalog(ask) {
-    try {
-      return await ask();
-    } catch (err) {
-      if (!isGone(err)) throw err;
-      let changed;
-      try {
-        changed = await refresh();
-      } catch (_) {
-        throw new DataUpdatedError();
-      }
-      // The catalog stands and only an overview is missing: the retry reads the parts.
-      if (!changed && !notServed.has(err.part.url))
-        throw new DataUpdatedError(
-          `Could not download ${err.part.name} data. Reload to try again.`,
-          "err.downloadReload",
-          { country: err.part.iso3, name: err.part.name },
-        );
+    let reread = false;
+    for (;;) {
       try {
         return await ask();
-      } catch (err2) {
-        throw isGone(err2) ? new DataUpdatedError() : err2;
+      } catch (err) {
+        if (!isGone(err)) throw err;
+        const overview = notServed.has(err.part.url);
+        if (reread) {
+          if (!overview) throw new DataUpdatedError();
+          continue;
+        }
+        reread = true;
+        let changed = false;
+        try {
+          changed = await refresh();
+        } catch (_) {
+          if (!overview) throw new DataUpdatedError();
+        }
+        if (!changed && !overview)
+          throw new DataUpdatedError(
+            `Could not download ${err.part.name} data. Reload to try again.`,
+            "err.downloadReload",
+            { country: err.part.iso3, name: err.part.name },
+          );
       }
     }
   }

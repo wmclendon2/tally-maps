@@ -261,6 +261,42 @@ def overview_checks(page, entry: dict, errors: list[str]) -> None:
                 errors.append(f"{iso3} with its overview gone: {got}, read {fetched}")
         finally:
             page.unroute(missing)
+
+        # The same with the connection failing just as the catalog is read again: the parts
+        # can still answer, so no "reload" either.
+        page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
+        fresh()
+        page.route(missing, lambda route: route.fulfill(status=404))
+        page.route("**/catalog.json", lambda route: route.abort())
+        try:
+            got = whole()
+            if got["total"] != entry["total"] or got["missing"]:
+                errors.append(f"{iso3} with its overview gone and no catalog: {got}")
+        finally:
+            page.unroute("**/catalog.json")
+            page.unroute(missing)
+
+        # And when the catalog read again names a new overview that is missing as well.
+        page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
+        fresh()
+
+        def renamed(route) -> None:
+            answer = route.fetch()
+            route.fulfill(
+                response=answer, body=answer.text().replace(overview["url"], "gone.tlyp.gz")
+            )
+
+        page.route(missing, lambda route: route.fulfill(status=404))
+        page.route("**/gone.tlyp.gz", lambda route: route.fulfill(status=404))
+        page.route("**/catalog.json", renamed)
+        try:
+            got = whole()
+            if got["total"] != entry["total"] or got["missing"]:
+                errors.append(f"{iso3} with its new overview gone too: {got}")
+        finally:
+            page.unroute("**/catalog.json")
+            page.unroute("**/gone.tlyp.gz")
+            page.unroute(missing)
         page.evaluate("async (c) => TallyStatic.removeCountry(c)", iso3)
         fresh()
 

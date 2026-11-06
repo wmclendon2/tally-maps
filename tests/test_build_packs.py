@@ -440,3 +440,36 @@ def test_small_countries_have_no_overview(tmp_path):
     entry["bytes"] = COUNTRY_OVERVIEW_MIN_BYTES
     assert write_country_overviews(tmp_path, {"CMR": entry}) == [entry]
     assert (tmp_path / entry["overview"]["url"]).exists()
+
+
+def lost_pack_catalog(where) -> None:
+    (where / "CMR.aaa.tlyp.gz").write_bytes(b"x")
+    entries = [
+        {"iso3": "CMR", "parts": [{"url": "CMR.aaa.tlyp.gz"}, {"url": "CMR.bbb.tlyp.gz"}]},
+    ]
+    (where / "catalog.json").write_text(json.dumps({"format": list(FORMAT), "countries": entries}))
+
+
+def test_a_country_that_lost_a_pack_is_not_dropped_without_a_word(tmp_path):
+    import build_packs
+
+    lost_pack_catalog(tmp_path)
+    with pytest.raises(RuntimeError, match=r"CMR \(CMR\.bbb\.tlyp\.gz\).*--country CMR"):
+        build_packs.ensure(["FJI"], tmp_path, workers=1)
+    assert (tmp_path / "CMR.aaa.tlyp.gz").exists(), "and the file it still had stays"
+
+
+def test_a_lost_pack_is_fine_when_the_run_rebuilds_it_or_drops_it(tmp_path, monkeypatch):
+    import build_packs
+
+    monkeypatch.setattr(
+        build_packs, "country_levels", lambda iso3, source: (pyramid(CMR), FEATURES, "2020")
+    )
+    monkeypatch.setattr(build_packs, "job_cost", lambda iso3: 0.0)
+    lost_pack_catalog(tmp_path)
+    build_packs.refuse_lost_packs(tmp_path, ["CMR"])
+    build_packs.ensure(["CMR"], tmp_path, workers=1)
+    cat = json.loads((tmp_path / "catalog.json").read_text())
+    assert [c["iso3"] for c in cat["countries"]] == ["CMR"]
+    lost_pack_catalog(tmp_path)
+    build_packs.ensure(["CMR"], tmp_path, workers=1, fresh=True)

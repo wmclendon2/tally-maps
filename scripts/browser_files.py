@@ -171,6 +171,16 @@ def shapefile(records: list[tuple[str, list]], project=lambda x, y: (x, y)) -> d
     }
 
 
+def understated(data: bytes) -> bytes:
+    """A zip whose central directory says each member unpacks to one byte, as a crafted one may."""
+    out = bytearray(data)
+    at = out.find(b"PK\x01\x02")
+    while at >= 0:
+        struct.pack_into("<I", out, at + 24, 1)
+        at = out.find(b"PK\x01\x02", at + 46)
+    return bytes(out)
+
+
 def zipped(parts: dict[str, bytes]) -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
@@ -637,6 +647,26 @@ def small_things(page, where: Path, paths: dict[str, Path], check: Check) -> Non
     )
     rows = open_file(page, beside)
     check("a large file the reader never opens is no reason to refuse", len(rows) == 1, rows)
+    lying = where / "lying_shp.zip"
+    lying.write_bytes(
+        understated(
+            zipped({**shapefile([("Yaounde", YAOUNDE[0])]), "extra.json": bytes(70_000_000)})
+        )
+    )
+    said = refused(page, lying)
+    check("a zip that understates its size is refused all the same", "unzips to" in said, said)
+    lying_kmz = where / "lying.kmz"
+    lying_kmz.write_bytes(understated(zipped({"doc.kml": bytes(70_000_000)})))
+    said = refused(page, lying_kmz)
+    check("a KMZ too", "unzips to" in said, said)
+    stubs = where / "large_stub.zip"
+    stubs.write_bytes(
+        zipped({**shapefile([("Yaounde", YAOUNDE[0])]), "__MACOSX/._big.dbf": bytes(65_000_000)})
+    )
+    said = refused(page, stubs)
+    check("a macOS stub the reader unpacks counts as well", "unzips to" in said, said)
+    rows = open_file(page, paths["zones_shp.zip"])
+    check("an ordinary zipped Shapefile still opens", len(rows) == 2, rows)
 
 
 def csv_rows(path: Path) -> list[dict]:
@@ -843,6 +873,26 @@ def counts_in_passing(browser, url: str, page, where: Path, check: Check) -> Non
     fresh.wait_for_timeout(5000)
     said = fresh.text_content("#status")
     check("an overtaken count's download says nothing", "Downloading" not in said, said)
+
+    # The older count fails after the newer one has answered.
+    fresh.evaluate(
+        """() => {
+            runQuery(() => new Promise((_, no) => setTimeout(() => no(new Error('old count')), 800)));
+            queryCountry('FJI');
+        }"""
+    )
+    fresh.wait_for_function("() => !inflight && lastResult?.country?.iso3 === 'FJI'")
+    fresh.wait_for_timeout(1500)
+    said = fresh.text_content("#status")
+    check("nor does an overtaken count's failure", "old count" not in said, said)
+    check(
+        "and the newer answer stands",
+        fresh.evaluate("() => lastResult.country.iso3") == "FJI"
+        and not fresh.evaluate(
+            "() => document.querySelector('#status').classList.contains('error')"
+        ),
+        said,
+    )
     context.close()
 
     # A circle reaching over the North Pole, as a count and as a row of a file.

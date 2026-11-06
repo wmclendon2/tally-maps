@@ -1471,7 +1471,8 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
     const bounds = frame?.(body);
     if (bounds) map.fitBounds(bounds, { padding: panelPadding(), maxZoom });
   } catch (err) {
-    if (err.name === "AbortError") return;
+    // A newer count has taken over: this one's failure is not what the page should say.
+    if (err.name === "AbortError" || controller.signal.aborted) return;
     // Out of date, or the data changed under the page: said in the notice, with Reload.
     if (err.name === "StaleAppError" || err.name === "DataUpdatedError") {
       setStatus("");

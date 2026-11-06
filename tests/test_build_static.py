@@ -8,11 +8,12 @@ from pathlib import Path
 import h3
 import numpy as np
 import pytest
+import typer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from build_packs import decode, encode, merge
-from build_static import WEB
+from build_static import ROOT, WEB, replace_output
 
 from ingest.pyramid import rollup
 
@@ -69,3 +70,41 @@ def test_static_engine_loads_before_app():
 
 def test_web_carries_no_analytics():
     assert "cloudflareinsights" not in (WEB / "index.html").read_text()
+
+
+def test_output_replaces_an_earlier_build_or_an_empty_folder(tmp_path):
+    build = tmp_path / "build"
+    build.mkdir()
+    (build / "index.html").write_text('<meta name="tally-data" content="data/manifest.json">')
+    replace_output(build)
+    assert not build.exists()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    replace_output(empty)
+    assert not empty.exists()
+    replace_output(tmp_path / "never made")
+
+
+@pytest.mark.parametrize("protected", [ROOT, ROOT.parent, WEB, Path(ROOT.anchor)])
+def test_output_refuses_the_repo_and_what_holds_it(protected):
+    with pytest.raises(typer.BadParameter, match="nothing was deleted"):
+        replace_output(protected)
+
+
+def test_output_refuses_a_folder_holding_something_else(tmp_path):
+    other = tmp_path / "photos"
+    other.mkdir()
+    (other / "holiday.jpg").write_bytes(b"x")
+    with pytest.raises(typer.BadParameter, match="nothing was deleted"):
+        replace_output(other)
+    assert (other / "holiday.jpg").exists()
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("<h1>someone else's page</h1>")
+    with pytest.raises(typer.BadParameter):
+        replace_output(site)
+    a_file = tmp_path / "notes.txt"
+    a_file.write_text("keep")
+    with pytest.raises(typer.BadParameter):
+        replace_output(a_file)
+    assert a_file.exists()

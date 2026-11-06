@@ -80,7 +80,7 @@ Read it before changing the pipeline, the pack format or the resolver.
   `standIns` in static.js swaps it for all of a country's parts or none, never both, and only
   when it costs fewer bytes than the parts still missing, so a saved country reads its parts.
   `build_static.py` writes them, so they change no country's pack. The catalog listing one the host
-  does not serve only costs the parts (`notServed`). Every record in `tally-packs` shows in the ? panel
+  does not serve only costs the parts (`notServed`), even when the catalog cannot be read again. Every record in `tally-packs` shows in the ? panel
   and Remove deletes it: a kept overview (`overviewBytes`, `savedContinents`) counts too.
 - Pack format: a format **major** bump makes old readers refuse a pack; additive changes
   bump the minor. Packs are named by content hash; `write_catalog` adds `continent`,

@@ -577,6 +577,34 @@ def load_entries(out: Path) -> dict[str, dict]:
     }
 
 
+def refuse_lost_packs(out: Path, todo: list[str]) -> None:
+    """Stop if the catalog lists a country that lost a file and this run will not rebuild it.
+
+    load_entries leaves such a country out, so the catalog written next would drop it with no
+    word, and prune would delete the files it still had.
+    """
+    path = out / "catalog.json"
+    if not path.exists():
+        return
+    cat = json.loads(path.read_text())
+    if cat.get("format", [0])[0] != FORMAT[0]:
+        return
+    lost = {
+        e["iso3"]: missing
+        for e in cat.get("countries", [])
+        if "parts" in e
+        and e["iso3"] not in todo
+        and (missing := [p["url"] for p in e["parts"] if not (out / p["url"]).exists()])
+    }
+    if lost:
+        said = "; ".join(f"{iso3} ({', '.join(files)})" for iso3, files in sorted(lost.items()))
+        codes = " ".join(f"--country {iso3}" for iso3 in sorted(lost))
+        raise RuntimeError(
+            f"pack files are missing for {said}. Rebuild with {codes}, "
+            "or pass --fresh to drop every country this run does not build."
+        )
+
+
 def part_levels(path: Path, wanted: tuple[int, ...]) -> dict:
     """Only these resolutions of one pack file."""
     raw = gzip.decompress(path.read_bytes())
@@ -802,6 +830,8 @@ def ensure(
             console.print(f"{iso3}: packs cached in {out}, reusing (--rebuild to redo)")
         else:
             todo.append(iso3)
+    if not fresh:
+        refuse_lost_packs(out, todo)
     workers = max(1, min(workers, len(todo)))
     if len(todo) > 1:
         console.print(f"building {len(todo)} countries with {workers} worker(s)")

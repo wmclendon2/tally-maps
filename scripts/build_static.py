@@ -177,12 +177,33 @@ def cached_no_data(entries: dict) -> tuple[str, bool]:
     return text, False
 
 
+def replace_output(out: Path) -> None:
+    """Clear `out` for a new build. Only an empty folder or an earlier build: `--out .` must not
+    delete the repo, nor a mistyped path whatever lives there."""
+    if not out.exists():
+        return
+    where = out.resolve()
+    protected = where == WEB.resolve() or where == ROOT.resolve() or where in ROOT.resolve().parents
+    page = out / "index.html"
+    earlier_build = (
+        out.is_dir() and page.is_file() and 'name="tally-data"' in page.read_text(errors="replace")
+    )
+    if protected or not (earlier_build or (out.is_dir() and not any(out.iterdir()))):
+        raise typer.BadParameter(
+            f"{out} is not empty and is not an earlier build; nothing was deleted. "
+            "Name a new folder, an empty one, or a previous build's."
+        )
+    shutil.rmtree(out)
+
+
 def main(
     country: Annotated[
         list[str] | None,
         typer.Option(help="ISO3 code; repeat for several (default: CMR, CAF and BRA)"),
     ] = None,
-    out: Annotated[Path, typer.Option(help="Output directory (replaced)")] = ROOT / "dist",
+    out: Annotated[
+        Path, typer.Option(help="Output directory (replaced, if empty or an earlier build)")
+    ] = ROOT / "dist",
     rebuild_packs: Annotated[
         bool, typer.Option(help="Recompute packs even if data/packs/ already has them")
     ] = False,
@@ -206,8 +227,7 @@ def main(
         "attribution": attribution({k for e in entries.values() for k in source_keys(e["source"])}),
     }
 
-    if out.exists():
-        shutil.rmtree(out)
+    replace_output(out)
     shutil.copytree(WEB, out, ignore=shutil.ignore_patterns(".DS_Store"))
     data = out / "data"
     data.mkdir()

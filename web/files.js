@@ -66,13 +66,26 @@ const TallyFiles = (() => {
 
   // ---- zip: KMZ, and whatever a zip holds besides a Shapefile -------------------------
 
-  async function inflate(bytes) {
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-    return new Response(stream).arrayBuffer();
+  // What comes out, up to `limit` bytes; null past that. A zip's sizes are only what it says,
+  // so a crafted one could otherwise unpack until the tab runs out of memory.
+  async function inflate(bytes, limit) {
+    const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+    const chunks = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return new Blob(chunks).arrayBuffer();
+      size += value.length;
+      if (size > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
   }
 
-  // The members of a zip, from its central directory: [{ name, read() }]. macOS's
-  // __MACOSX/._* stubs are left out.
+  // The members of a zip, from its central directory: [{ name, size, stub, read(limit) }].
+  // `stub` marks macOS's __MACOSX/._* files, which are not part of what the zip holds.
   function zipMembers(buf) {
     const view = new DataView(buf);
     let end = -1;
@@ -94,14 +107,16 @@ const TallyFiles = (() => {
       const local = view.getUint32(at + 42, true);
       const name = new TextDecoder().decode(new Uint8Array(buf, at + 46, nameLen));
       at += 46 + skip;
-      if (name.startsWith("__MACOSX/") || name.endsWith("/")) continue;
+      if (name.endsWith("/")) continue;
       out.push({
         name,
         size,
-        read: async () => {
+        stub: name.startsWith("__MACOSX/"),
+        read: async (limit) => {
           const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
           const bytes = new Uint8Array(buf, start, packed);
-          return method === 0 ? bytes.slice().buffer : inflate(bytes);
+          if (method !== 0) return inflate(bytes, limit);
+          return packed > limit ? null : bytes.slice().buffer;
         },
       });
     }
@@ -504,20 +519,32 @@ const TallyFiles = (() => {
     return fromFeatures(toGeoJSON.kml(doc).features, name);
   }
 
+  const SHAPEFILE_READS = ["shp", "dbf", "json", "prj", "cpg"];
+
   // shpjs answers a zip with one collection, or a list of them when it holds several layers.
   const layersOf = (data) => (Array.isArray(data) ? data : [data]).flatMap((c) => c.features ?? []);
 
   async function fromZip(buf, name) {
-    const members = zipMembers(buf);
-    if (!members) throw new FileProblem("file.errRead", { name });
+    const all = zipMembers(buf);
+    if (!all) throw new FileProblem("file.errRead", { name });
+    const members = all.filter((m) => !m.stub);
     const of = (...exts) => members.filter((m) => exts.includes(extension(m.name)));
+    const unzipsTooBig = (size) => new FileProblem("file.errTooBigUnzipped", tooBig(size, name));
     if (of("shp").length) {
-      // shpjs unpacks all of these at once and leaves the rest of the zip alone (its filter is
-      // the same list), so a Shapefile beside a large photo opens.
-      const size = of("shp", "dbf", "json", "prj", "cpg").reduce((sum, m) => sum + m.size, 0);
-      if (size > MAX_BYTES) throw new FileProblem("file.errTooBigUnzipped", tooBig(size, name));
+      // shpjs unpacks all of these at once, stubs too, and leaves the rest of the zip alone (its
+      // filter is the same list), so a Shapefile beside a large photo opens.
+      const unpacked = all.filter((m) => SHAPEFILE_READS.includes(extension(m.name)));
+      const size = unpacked.reduce((sum, m) => sum + m.size, 0);
+      if (size > MAX_BYTES) throw unzipsTooBig(size);
       const shp = await library("shp");
       try {
+        // It has no limit of its own, so what they really unpack to is counted first.
+        let left = MAX_BYTES;
+        for (const member of unpacked) {
+          const bytes = await member.read(left);
+          if (!bytes) throw unzipsTooBig(MAX_BYTES + 1);
+          left -= bytes.byteLength;
+        }
         return fromFeatures(layersOf(await shp(buf)), name);
       } catch (err) {
         if (err instanceof FileProblem) throw err;
@@ -528,8 +555,10 @@ const TallyFiles = (() => {
     // A KMZ is a zip with a .kml inside; a zip may just as well hold any other format here.
     const inner = of("kml")[0] ?? of("geojson", "json")[0] ?? of("csv", "tsv")[0];
     if (!inner) throw new FileProblem("file.errZip", { name });
-    if (inner.size > MAX_BYTES) throw new FileProblem("file.errTooBigUnzipped", tooBig(inner.size, name));
-    return fromBytes(inner.name, await inner.read(), name);
+    if (inner.size > MAX_BYTES) throw unzipsTooBig(inner.size);
+    const bytes = await inner.read(MAX_BYTES);
+    if (!bytes) throw unzipsTooBig(MAX_BYTES + 1);
+    return fromBytes(inner.name, bytes, name);
   }
 
   const tooBig = (bytes, name) => ({ name, mb: Math.ceil(bytes / 1e6), limit: MAX_BYTES / 1e6 });
