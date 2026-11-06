@@ -831,6 +831,9 @@ const fmtDist = (km) => {
   return `${shown} ${U().dist}`;
 };
 
+const whereRadius = ([lng, lat], km) =>
+  t("where.radius", { dist: fmtDist(km), at: `${fmtCoord(lat, "n", "s")}, ${fmtCoord(lng, "e", "w")}` });
+
 function queryRadius() {
   if (!radiusCenter) return;
   const geometry = circle(radiusCenter, radiusKm);
@@ -842,10 +845,7 @@ function queryRadius() {
     ],
   });
   clearShape();
-  const [lng, lat] = radiusCenter;
-  queryPopulation(geometry, () =>
-    t("where.radius", { dist: fmtDist(radiusKm), at: `${fmtCoord(lat, "n", "s")}, ${fmtCoord(lng, "e", "w")}` }),
-  );
+  queryPopulation(geometry, () => whereRadius(radiusCenter, radiusKm));
 }
 
 $("pick-point").addEventListener("click", () => setPicking(!pickingPoint));
@@ -918,6 +918,8 @@ function setUnits(u, { fromUser = false } = {}) {
   $("legend-title").textContent = t("legend.title", { area: U().area });
   showRadius();
   showFileRadius();
+  // A circle Tally named says its radius in the chosen unit.
+  fileSet?.rows.forEach((_, i) => showRow(i));
   scale?.setUnit(u);
   // A circle on the map is counted again at its new radius; any other count is just
   // shown in the new units.
@@ -950,8 +952,8 @@ function clearAll() {
 }
 
 // ---- about sheet -------------------------------------------------------------
-// The ? sheet: what Tally is and where its numbers come from, then saved data, settings
-// and credits. It used to open on a world map of coverage, which the gray no-data layer on
+// The ? sheet: what Tally is, how far to trust it, settings, where its numbers come from,
+// how to use it, saved data and credits. It used to open on a world map of coverage, which the gray no-data layer on
 // the map itself made redundant (F-20).
 const SHELL = document.querySelector('script[src^="app.js?v="]')?.src.split("?v=")[1];
 
@@ -985,6 +987,24 @@ function toggleCoverage(open) {
   // Into the sheet on opening, and back to the ? button on closing, for keyboards.
   (open ? $("coverage-close") : $("coverage-open")).focus({ preventScroll: true });
 }
+
+// A dialog: Esc closes it, and Tab stays inside it rather than wandering behind it.
+document.addEventListener("keydown", (e) => {
+  if ($("coverage").hidden) return;
+  if (e.key === "Escape") return toggleCoverage(false);
+  if (e.key !== "Tab") return;
+  const inside = [...$("coverage").querySelectorAll("a[href], button, select, input, summary")].filter(
+    (el) => el.offsetParent && !el.disabled,
+  );
+  const [first, last] = [inside[0], inside[inside.length - 1]];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+});
 
 // Static mode: which countries this browser holds, with Save / Remove for each.
 // Grouped by continent, each a collapsible section with one button for all of it: a flat
@@ -1777,7 +1797,7 @@ async function exportImage() {
     );
 
     const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    setStatus(t("status.saved", { file: saveFile(blob, "png") }));
+    setStatus(t("status.saved", { file: saveFile(blob, "png", countFileLabel()) }));
   } catch (err) {
     setStatus(t("status.imageFailed", { error: errText(err) }), true);
   } finally {
@@ -1785,10 +1805,32 @@ async function exportImage() {
   }
 }
 
+// A name made safe for a file's name: "Côte d'Ivoire" becomes "cote-d-ivoire". A row's name
+// comes from someone's file, so nothing but letters and digits survives.
+const fileSlug = (name) =>
+  String(name ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .slice(0, 40)
+    .replace(/^-+|-+$/g, "");
+
+// What a saved count holds, for its file's name: tally-radius-..., tally-country-cameroon-...
+// A circle is "radius" as on its tab, though its `kind` column says "circle". Only a name
+// someone gave goes in: Tally's own "Drawn shape" or "Within 5 km of ..." would add nothing.
+function countFileLabel(res = lastResult, row = selectedRow()) {
+  const { kind, name } = exportSummary(res, row);
+  const word = kind === "circle" ? "radius" : kind;
+  const given = res.country || (row?.name && !row.drawn && !row.said);
+  const slug = given ? fileSlug(name) || fileSlug(res.country?.iso3) : "";
+  return slug ? `${word}-${slug}` : word;
+}
+
 // Hand the visitor a file made here: nothing is uploaded. Returns the file's name.
-function saveFile(blob, ext) {
+function saveFile(blob, ext, label) {
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-  const name = `tally-${stamp}.${ext}`;
+  const name = `tally-${label}-${stamp}.${ext}`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1814,6 +1856,8 @@ const countTitle = (res) =>
       ? t("image.titleWhere", { where: lastLabel() })
       : t("image.titleShape");
 
+const upperFirst = (s) => s.charAt(0).toLocaleUpperCase(TallyI18n.locale) + s.slice(1);
+
 // What was counted, in the same words as the panel and the image. The keys and `kind`
 // stay English whatever the language: other tools read them.
 function exportSummary(res, row = selectedRow()) {
@@ -1822,7 +1866,9 @@ function exportSummary(res, row = selectedRow()) {
     ? placeName(res.country.iso3, res.country.name)
     : row
       ? rowName(row)
-      : countTitle(res);
+      : lastLabel
+        ? upperFirst(lastLabel())
+        : t("file.drawnShape");
   const year = res.country ? String(res.country.data_version ?? "").slice(0, 4) : "";
   return {
     name,
@@ -1856,11 +1902,26 @@ function exportCsv() {
   const lines = [Object.keys(row), Object.values(row)].map((r) => r.map(csvField).join(","));
   // The byte-order mark makes Excel read the file as UTF-8 (Côte d'Ivoire, km²).
   const blob = new Blob(["﻿" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
-  setStatus(t("status.saved", { file: saveFile(blob, "csv") }));
+  setStatus(t("status.saved", { file: saveFile(blob, "csv", countFileLabel()) }));
 }
 
 // ~10 cm: enough for any hexagon or drawn vertex, and it keeps 40,000 cells to a few MB.
 const roundCoords = (c) => (typeof c[0] === "number" ? c.map((x) => round(x, 6)) : c.map(roundCoords));
+
+// What a saved count needs to come back as it was (F-41): a circle's center and radius, and
+// `drawn` when Tally named it rather than a person or a file. Unrounded, for the same count.
+function reopenColumns(res, row) {
+  if (res.country) return { country_code: lastCountry };
+  const circled = row?.center
+    ? [row.center, row.radiusKm ?? fileSet.radiusKm]
+    : !row && radiusCenter && lastLabel
+      ? [radiusCenter, radiusKm]
+      : null;
+  return {
+    ...(circled && { latitude: circled[0][1], longitude: circled[0][0], radius_km: circled[1] }),
+    ...((!row || row.drawn) && { drawn: true }),
+  };
+}
 
 // One FeatureCollection: every populated hexagon (`kind: "hexagon"`, its H3 index and its
 // people), then the shape with the summary (`kind` "shape" or "circle"). The shape comes
@@ -1883,14 +1944,20 @@ function exportGeojson() {
   }));
   const shape = {
     type: "Feature",
-    properties: { name: summary.name, kind: summary.kind, population, ...summary },
+    properties: {
+      name: summary.name,
+      kind: summary.kind,
+      population,
+      ...summary,
+      ...reopenColumns(res, selectedRow()),
+    },
     geometry: lastGeometry && !res.country
       ? { type: lastGeometry.type, coordinates: roundCoords(lastGeometry.coordinates) }
       : null,
   };
   const text = JSON.stringify({ type: "FeatureCollection", features: [...hexagons, shape] });
   const blob = new Blob([text], { type: "application/geo+json" });
-  setStatus(t("status.saved", { file: saveFile(blob, "geojson") }));
+  setStatus(t("status.saved", { file: saveFile(blob, "geojson", countFileLabel(res)) }));
 }
 
 $("export").addEventListener("click", exportImage);
@@ -1909,7 +1976,18 @@ const FILE_LAYERS = ["file-fill", "file-line", "file-selected", "file-dot"];
 const KEPT_FILE = "tally-kept-file";
 let fileRun = 0; // the count under way; a newer one, or Stop, makes an older one give up
 
-const rowName = (row) => row.name ?? t(row.fallback[0], row.fallback[1]);
+// Alone it is just a drawn shape; in a list its row number tells it from the others.
+const drawnShapeName = (row) =>
+  fileSet.rows.length > 1 ? t("file.drawnShapeNumber", { n: row.fallback[1].n }) : t("file.drawnShape");
+
+// A row Tally named itself when it was saved (`drawn`) is named again in today's language
+// and units; the rest keep the name in the file.
+const rowName = (row) =>
+  row.drawn
+    ? row.center
+      ? upperFirst(whereRadius(row.center, row.radiusKm))
+      : drawnShapeName(row)
+    : (row.name ?? t(row.fallback[0], row.fallback[1]));
 const selectedRow = () => (fileSet?.selected != null ? fileSet.rows[fileSet.selected] : null);
 // A point with no radius of its own takes the one box in the tab.
 const rowGeometry = (row) =>
@@ -1991,6 +2069,9 @@ function showRow(i) {
   const row = fileSet.rows[i];
   const value = rowValue(row);
   const el = rowElement(i);
+  const name = el.querySelector(".file-name");
+  name.textContent = rowName(row);
+  name.title = rowName(row);
   el.querySelector(".file-value").textContent = value.text;
   el.querySelector(".file-note").textContent = value.note;
   el.querySelector(".file-note").hidden = !value.note;
@@ -2008,8 +2089,6 @@ function fillFileRows() {
       button.disabled = !rowGeometry(row);
       const name = document.createElement("span");
       name.className = "file-name";
-      name.textContent = rowName(row);
-      name.title = rowName(row);
       const value = document.createElement("span");
       value.className = "file-value";
       const note = document.createElement("span");
@@ -2040,7 +2119,9 @@ function showFileSum() {
   $("file-skipped").hidden = !skipped;
   $("file-stop").hidden = !running;
   $("file-rest").hidden = running || !left;
-  $("file-save").hidden = running || !rows.length;
+  // One row has nothing to add up: the Save row under its count holds all of it.
+  $("file-save").hidden = running || rows.length < 2;
+  showRowChoice();
   if (running) return;
   $("file-progress").textContent = left ? t("file.stopped", { done: rows.length - left, n: rows.length }) : "";
 }
@@ -2120,6 +2201,16 @@ async function countFile() {
   showFileSum();
 }
 
+// With several rows, which Save is which, and that a row has hexagons to show.
+function showRowChoice() {
+  const several = fileSet.rows.length > 1;
+  const picked = several && fileSet.selected != null;
+  $("save-count").hidden = picked;
+  $("save-row").hidden = !picked;
+  $("save-label").classList.toggle("own-line", picked);
+  $("file-hint").hidden = !several || picked || !fileSet.rows.some((r) => r.geometry || r.center);
+}
+
 function selectRow(i) {
   if (!fileSet) return;
   const before = fileSet.selected;
@@ -2131,6 +2222,15 @@ function selectRow(i) {
     button?.setAttribute("aria-current", "true");
     button?.scrollIntoView({ block: "nearest" });
   }
+  showRowChoice();
+}
+
+// Under the number, in words. A row Tally named itself reads as it did when first counted;
+// `said` is the same words from a file saved before `drawn` existed.
+function rowLabel(row) {
+  if (row.drawn) return row.center ? () => whereRadius(row.center, row.radiusKm) : null;
+  if (row.said) return () => row.said;
+  return () => t("where.file", { name: rowName(row) });
 }
 
 function pickRow(i) {
@@ -2139,7 +2239,7 @@ function pickRow(i) {
   if (!geometry) return;
   clearShape();
   clearCircle();
-  queryPopulation(geometry, () => t("where.file", { name: rowName(row) }), { row: i });
+  queryPopulation(geometry, rowLabel(row), { row: i });
 }
 
 // A click on a shape picks its row, unless the click belongs to drawing or to placing a point.
@@ -2206,6 +2306,23 @@ function closeFile() {
   if (wasRow) clearAll();
 }
 
+// A file of one row has nothing to choose between, so its heatmap comes up on its own, unless
+// the visitor has moved on while it was counted.
+function showOnlyRow(set) {
+  const [row, more] = set.rows;
+  if (set !== fileSet || more || set.selected != null || $("mode-file").hidden) return;
+  if (row.result && !row.failure) pickRow(0);
+}
+
+function pickWhole(code) {
+  const pick = $("country-pick");
+  pick.value = code;
+  if (pick.value !== code) return false; // not in this build, or an older file's own word for it
+  setMode("country");
+  pick.dispatchEvent(new Event("change"));
+  return true;
+}
+
 async function openFiles(files) {
   if (!files.length) return;
   setMode("file");
@@ -2213,9 +2330,12 @@ async function openFiles(files) {
   try {
     const { name, rows } = await TallyFiles.read(files);
     closeFile();
+    // A saved whole country has no shape to list: it opens where it is picked.
+    if (rows.length === 1 && rows[0].whole && pickWhole(rows[0].whole)) return setStatus("");
     fileSet = { name, rows, radiusKm, selected: null, running: false };
     setStatus("");
-    showFile();
+    const set = fileSet;
+    showFile().then(() => showOnlyRow(set));
   } catch (err) {
     console.warn("file:", err);
     setStatus(err.key ? errText(err) : t("file.errRead", { name: files[0].name }), true);
@@ -2278,8 +2398,9 @@ function fileColumns(row) {
   if (row.center) {
     summary.latitude = row.center[1];
     summary.longitude = row.center[0];
-    summary.radius_km = round(row.radiusKm ?? fileSet.radiusKm, 3);
+    summary.radius_km = round(row.radiusKm ?? fileSet.radiusKm, 6);
   }
+  if (row.drawn) summary.drawn = true;
   return summary;
 }
 
@@ -2302,7 +2423,7 @@ function exportFileCsv() {
   const lines = [keys, ...rows.map((r) => keys.map((k) => safeCell((k in r.summary ? r.summary : r.own)[k])))];
   const text = lines.map((line) => line.map(csvField).join(",")).join("\r\n");
   const blob = new Blob(["﻿" + text + "\r\n"], { type: "text/csv;charset=utf-8" });
-  setStatus(t("status.saved", { file: saveFile(blob, "csv") }));
+  setStatus(t("status.saved", { file: saveFile(blob, "csv", "list") }));
 }
 
 // Every column a row of the list can have, in the order a single count's file has them.
@@ -2311,7 +2432,14 @@ function fileColumnKeys() {
     { total: 0, areaKm2: 0, density: 0, missing: [], source: "", resolution: 0, populated_cells: 0 },
     fileSet.rows[0],
   );
-  return { ...sample, note: "", latitude: "", longitude: "", radius_km: "" };
+  return {
+    ...sample,
+    note: "",
+    latitude: "",
+    longitude: "",
+    radius_km: "",
+    ...(fileSet.rows.some((r) => r.drawn) && { drawn: "" }),
+  };
 }
 
 // The file's shapes with what was counted in each: no hexagons, which would run to hundreds
@@ -2319,6 +2447,7 @@ function fileColumnKeys() {
 function exportFileGeojson() {
   const taken = new Set(Object.keys(fileColumnKeys()));
   taken.add("population");
+  taken.add("drawn");
   const features = fileSet.rows.map((row) => {
     const { population_estimate: population = null, ...summary } = fileColumns(row);
     const geometry = rowGeometry(row);
@@ -2332,7 +2461,7 @@ function exportFileGeojson() {
   const blob = new Blob([JSON.stringify({ type: "FeatureCollection", features })], {
     type: "application/geo+json",
   });
-  setStatus(t("status.saved", { file: saveFile(blob, "geojson") }));
+  setStatus(t("status.saved", { file: saveFile(blob, "geojson", "list") }));
 }
 $("file-csv").addEventListener("click", exportFileCsv);
 $("file-geojson").addEventListener("click", exportFileGeojson);

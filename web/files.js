@@ -179,6 +179,82 @@ const TallyFiles = (() => {
 
   const headerKey = (h) => h.trim().toLowerCase().replace(/[\s-]+/g, "_");
 
+  // ---- Tally's own files (F-04, F-41) -----------------------------------------------------
+  // The columns Tally writes are not the file's own: counting again writes them fresh, and
+  // would otherwise carry the old ones along as file_area_km2 and so on, generation on generation.
+  const COUNTED_WITH = "tallymaps.org";
+  const OWN_COLUMNS = new Set([
+    "name", "kind", "country_iso3", "population", "population_estimate", "area_km2", "area_mi2",
+    "density_per_km2", "density_per_mi2", "left_out", "source", "data_year", "h3_resolution",
+    "hexagons", "counted_at", "counted_with", "note", "latitude", "longitude", "radius_km", "drawn",
+    "country_code",
+  ]);
+  const withoutOwn = (props) =>
+    Object.fromEntries(Object.entries(props).filter(([k]) => !OWN_COLUMNS.has(k)));
+
+  // Before F-41 a count's name was its image's title, in the language it was saved in.
+  const OLD_SHAPE_TITLES = new Set([
+    "Population inside a drawn shape",
+    "Population à l'intérieur d'une forme dessinée",
+    "Población dentro de una forma dibujada",
+    "População dentro de uma forma desenhada",
+    "Penduduk di dalam bentuk yang digambar",
+  ]);
+  const OLD_CIRCLE_TITLE = /^(?:Population|Población|População|Penduduk) (.*\d°.*)$/;
+
+  // Is this polygon the circle these numbers describe? Each corner within 2% of the radius
+  // leaves room for the rounding of a saved outline. A map tool may have moved or reshaped
+  // the outline since, and then the outline is what the file says: it stays a shape.
+  function isOutlineOf(geometry, [lng, lat], km) {
+    if (geometry?.type !== "Polygon" || geometry.coordinates.length !== 1) return false;
+    if (![lng, lat, km].every(Number.isFinite)) return false;
+    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 540 && km > 0 && km <= RADIUS_KM_MAX)) return false;
+    const rad = Math.PI / 180;
+    return geometry.coordinates[0].every(([x, y]) => {
+      const a =
+        Math.sin(((y - lat) * rad) / 2) ** 2 +
+        Math.cos(y * rad) * Math.cos(lat * rad) * Math.sin(((x - lng) * rad) / 2) ** 2;
+      const d = 2 * 6371.0088 * Math.asin(Math.min(1, Math.sqrt(a)));
+      return Math.abs(d - km) <= km * 0.02;
+    });
+  }
+
+  // A row of Tally's own GeoJSON comes back as it was saved: a circle as a circle (F-41), and
+  // a count Tally named itself without that name, so it is said afresh.
+  function savedRow(row, props) {
+    if (props?.counted_with !== COUNTED_WITH) return row;
+    const out = { ...row, props: withoutOwn(props) };
+    // A whole country or continent is saved with its hexagons and no outline: Tally picks it
+    // again if it is all that was opened, and a list says where to find it.
+    if (row.problem?.key === "file.problemNoShape" && ["country", "continent"].includes(props.kind)) {
+      out.kind = props.kind;
+      out.problem = { key: "file.problemWhole" };
+      out.whole =
+        props.country_code ||
+        props.country_iso3 ||
+        (props.kind === "continent" ? `continent:${props.name}` : null);
+      return out;
+    }
+    if (row.problem) return row;
+    const center = [props.longitude, props.latitude];
+    if (props.kind === "circle" && isOutlineOf(row.geometry, center, props.radius_km)) {
+      delete out.geometry;
+      out.kind = "circle";
+      out.fallback = ["file.unnamedPoint", row.fallback[1]];
+      out.center = center;
+      out.radiusKm = props.radius_km;
+    }
+    const oldCircle = row.name?.match(OLD_CIRCLE_TITLE);
+    if (props.drawn === true || OLD_SHAPE_TITLES.has(row.name)) {
+      out.drawn = true;
+      out.name = null;
+    } else if (oldCircle) {
+      out.said = oldCircle[1];
+      out.name = oldCircle[1].charAt(0).toLocaleUpperCase() + oldCircle[1].slice(1);
+    }
+    return out;
+  }
+
   function fromCsv(text, name) {
     const delimiter = delimiterOf(text);
     const table = csvRows(text, delimiter);
@@ -199,12 +275,17 @@ const TallyFiles = (() => {
     };
     return table.slice(1).map((cells, i) => {
       const props = Object.fromEntries(table[0].map((h, c) => [h.trim(), cells[c] ?? ""]));
+      const own = props.counted_with === COUNTED_WITH;
       const row = {
         name: cells[nameAt]?.trim() || null,
         fallback: ["file.unnamedPoint", { n: i + 1 }],
         kind: "circle",
-        props,
+        props: own ? withoutOwn(props) : props,
       };
+      if (own && props.drawn === "true") {
+        row.drawn = true;
+        row.name = null;
+      }
       const y = number(cells[lat]);
       const x = number(cells[lng]);
       if (!(Math.abs(y) <= 90 && Math.abs(x) <= 540)) {
@@ -359,7 +440,7 @@ const TallyFiles = (() => {
     const nameKey = nameColumn(kept);
     const rows = kept.flatMap((f, i) => {
       const own = nameKey ? String(f.properties?.[nameKey] ?? "").trim() : "";
-      return featureRows(f, i).map((row) => ({ ...row, name: own || null }));
+      return featureRows(f, i).map((row) => savedRow({ ...row, name: own || null }, f?.properties));
     });
     // Every row's coordinates out of range is the file's coordinate system, not its rows.
     if (rows.length && rows.every((r) => r.problem?.key === "file.problemNotLatLng"))
@@ -447,21 +528,55 @@ const TallyFiles = (() => {
     }
   }
 
+  const SHAPEFILE_PARTS = ["shp", "dbf", "shx", "prj", "cpg"];
+
+  // What was picked, as things to read: each file on its own, and a Shapefile's loose parts
+  // together. One .shp takes every part picked with it; several go by their names.
+  function sourcesOf(files) {
+    const isPart = (f) => SHAPEFILE_PARTS.includes(extension(f.name));
+    const stem = (f) => f.name.slice(0, f.name.lastIndexOf(".")).toLowerCase();
+    const parts = files.filter(isPart);
+    const shps = parts.filter((f) => extension(f.name) === "shp");
+    const partsOf = (shp) => (shps.length === 1 ? parts : parts.filter((p) => stem(p) === stem(shp)));
+    const stray = parts.find((p) => !shps.some((shp) => partsOf(shp).includes(p)));
+    if (stray) throw new FileProblem("file.errNoShp", { name: stray.name });
+    return files
+      .filter((f) => !isPart(f) || shps.includes(f))
+      .map((f) => ({ name: f.name, parts: shps.includes(f) ? partsOf(f) : null, file: f }));
+  }
+
+  async function readSource({ name, parts, file }) {
+    try {
+      const rows = parts ? await fromLoose(parts, name) : await fromBytes(name, await file.arrayBuffer(), name);
+      if (!rows.length) throw new FileProblem("file.errEmpty", { name });
+      return rows;
+    } catch (err) {
+      if (err instanceof FileProblem) throw err;
+      console.warn("file:", err);
+      throw new FileProblem("file.errRead", { name });
+    }
+  }
+
+  // Everything picked makes one list. A file that cannot be read stops it, and is named: a
+  // list quietly missing a file would look complete.
   async function read(fileList) {
     const files = [...fileList];
-    const main = files.find((f) => extension(f.name) === "shp") ?? files[0];
-    const name = main.name;
+    const sources = sourcesOf(files);
+    const several = sources.length > 1;
+    const name = sources.map((s) => s.name).join(", ");
     const size = files.reduce((sum, f) => sum + f.size, 0);
-    if (size > MAX_BYTES) throw new FileProblem("file.errTooBig", tooBig(size, name));
-    if (["dbf", "shx", "prj", "cpg"].includes(extension(name)))
-      throw new FileProblem("file.errNoShp", { name });
-    const rows =
-      extension(name) === "shp"
-        ? await fromLoose(files, name)
-        : await fromBytes(name, await main.arrayBuffer(), name);
-    if (!rows.length) throw new FileProblem("file.errEmpty", { name });
+    if (size > MAX_BYTES)
+      throw new FileProblem(several ? "file.errTooBigFiles" : "file.errTooBig", tooBig(size, name));
+    const rows = [];
+    for (const source of sources) rows.push(...(await readSource(source)));
     if (rows.length > MAX_ROWS)
-      throw new FileProblem("file.errTooMany", { name, n: rows.length, limit: MAX_ROWS });
+      throw new FileProblem(several ? "file.errTooManyFiles" : "file.errTooMany", {
+        name,
+        n: rows.length,
+        limit: MAX_ROWS,
+      });
+    // "Shape 1" once, not once for each file.
+    if (several) rows.forEach((row, i) => (row.fallback = [row.fallback[0], { n: i + 1 }]));
     return { name, rows };
   }
 

@@ -154,9 +154,9 @@ minus the built countries' outlines). The **Country** tab sums a country's own p
 one level, with no outline or polyfill, from its overview if it has one; a continent takes the
 same path from its own.
 
-**A file of shapes or points** (F-02). The **File** tab reads GeoJSON, CSV, KML, KMZ and
-Shapefiles (zipped or loose) in the page: nothing is uploaded. `web/files.js` turns a file
-into rows; `togeojson` and `shpjs` load only when such a file is opened, and the service
+**Files of shapes or points** (F-02). The **Files** tab reads GeoJSON, CSV, KML, KMZ and
+Shapefiles (zipped or loose) in the page: nothing is uploaded. `web/files.js` turns the files
+picked into the rows of one list; `togeojson` and `shpjs` load only when such a file is opened, and the service
 worker caches them for offline use. `app.js` sends each row through `TallyStatic.query`
 one at a time, at its own level, so a row's number is what drawing that shape would give,
 and keeps only the row's numbers: its hexagons are counted again when it is picked. Rows
@@ -165,6 +165,11 @@ own columns. A file over 500 rows or 64 MB is refused, not cut short. The sum of
 is shown with a note that people in overlapping shapes count once per shape; shapes that
 adjoin and land on one level partition exactly (500 in Cameroon: the sum equals the box
 at that level), and shapes on different levels stayed within 0.22% (649 zones).
+
+Tally's own saved GeoJSON comes back as it was saved (F-41): a circle by the center and radius
+it stores, so it is the same polygon and the same count, unless a map tool has since moved its
+outline; a whole country or continent, which has no outline, is picked again in the Country tab.
+A file of one row shows its heatmap without being picked.
 
 **App shell and service worker.** `index.html` loads `static.js?v=N`, `files.js?v=N`, `app.js?v=N` and
 `style.css?v=N` and `i18n.js?v=N`, and `sw.js` sets `SHELL_VERSION = "N"`. Both change together on every change

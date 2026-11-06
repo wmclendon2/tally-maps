@@ -55,7 +55,13 @@ Read it before changing the pipeline, the pack format or the resolver.
 - A file's rows (F-02) go through `TallyStatic.query` one by one, each at its own level, so a
   row equals the same shape drawn. A row is never dropped: what cannot be counted stays in
   the list and says why. A list keeps numbers only, never a row's hexagons. `scripts/browser_files.py`
-  checks it; a new format goes in there too.
+  checks it; a new format goes in there too. Everything picked makes one list; a file that cannot
+  be read stops it and is named (`files.read`).
+- Tally reads its own saved files back (F-41, `savedRow` in files.js, on `counted_with`): a circle
+  by `latitude`/`longitude`/`radius_km`, while its outline still fits them (else the outline wins);
+  `drawn` means Tally named the row, so it is named afresh; `country_code` picks a whole country
+  or continent again. Its columns are not carried as the file's own. A new saved column goes in
+  `OWN_COLUMNS`. Files saved before these columns still open (`OLD_SHAPE_TITLES`).
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
   `tolerance: 0` on the `population-cells` source (otherwise sub-pixel hexes vanish when
   zoomed out).

@@ -33,9 +33,9 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=63">
+  <link rel="stylesheet" href="style.css?v=69">
   <!-- The interface's languages (F-01): first, so the strings load while the map does. -->
-  <script src="i18n.js?v=63"></script>
+  <script src="i18n.js?v=69"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -94,7 +94,7 @@
       <button class="mode" role="tab" id="tab-country" data-mode="country" aria-controls="mode-country"
               aria-selected="false" tabindex="-1" data-static-only hidden data-i18n="mode.country">Country</button>
       <button class="mode" role="tab" id="tab-file" data-mode="file" aria-controls="mode-file"
-              aria-selected="false" tabindex="-1" data-i18n="mode.file">File</button>
+              aria-selected="false" tabindex="-1" data-i18n="mode.file">Files</button>
     </div>
 
     <section id="mode-shape" class="mode-pane" role="tabpanel" aria-labelledby="tab-shape">
@@ -148,15 +148,14 @@
     <!-- F-02: a file of shapes or points, read and counted on this device. -->
     <section id="mode-file" class="mode-pane" role="tabpanel" aria-labelledby="tab-file" hidden>
       <div id="file-start">
-        <p class="how" data-i18n="file.how">Count every shape or point in a file: GeoJSON, KML, KMZ, a zipped Shapefile, or a
-          CSV with latitude and longitude. It stays on this device; nothing is uploaded.</p>
+        <p class="how" data-i18n="file.how">Count every shape or point in one or more files: GeoJSON, KML, KMZ, a zipped Shapefile, or a CSV with latitude and longitude. They stay on this device; nothing is uploaded.</p>
         <div class="actions">
           <button id="file-open" class="primary">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4l2 2h7A1.5 1.5 0 0 1 18 6.5V8H2V4.5zM2 9.5h16v6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 15.5v-6z"/></svg>
-            <span data-i18n="file.open">Open a file</span>
+            <span data-i18n="file.open">Open files</span>
           </button>
         </div>
-        <input id="file-input" type="file" multiple hidden aria-label="Open a file"
+        <input id="file-input" type="file" multiple hidden aria-label="Open files"
                data-i18n-attr="aria-label=file.open">
       </div>
       <div id="file-list" hidden>
@@ -165,8 +164,8 @@
             <span id="file-name" class="file-title-name"></span>
             <span id="file-size" class="file-title-size"></span>
           </div>
-          <button id="file-close" class="count-close file-close" aria-label="Close this file"
-                  title="Close this file" data-i18n-attr="aria-label=file.close;title=file.close">
+          <button id="file-close" class="count-close file-close" aria-label="Close this list"
+                  title="Close this list" data-i18n-attr="aria-label=file.close;title=file.close">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.7 4.3 10 8.6l4.3-4.3 1.4 1.4L11.4 10l4.3 4.3-1.4 1.4L10 11.4l-4.3 4.3-1.4-1.4L8.6 10 4.3 5.7z"/></svg>
           </button>
         </div>
@@ -186,6 +185,7 @@
         </div>
         <p class="file-small" id="file-overlap" hidden data-i18n="file.overlap">People in overlapping shapes count once for each shape.</p>
         <p class="file-small" id="file-skipped" hidden></p>
+        <p class="file-small" id="file-hint" hidden data-i18n="file.hint">Pick a row to see its hexagons.</p>
         <div class="file-run">
           <p class="file-small" id="file-progress"></p>
           <button id="file-stop" class="ghost small" hidden data-i18n="file.stop">Stop</button>
@@ -244,7 +244,8 @@
         <!-- One icon on the label, not one per button: four in a row overflow the panel. -->
         <span class="tools-label save-label" id="save-label">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v9.6l3.3-3.3 1.4 1.4L10 14.4 5.3 9.7l1.4-1.4L10 11.6V2zM3 15h14v2H3z"/></svg>
-          <span data-i18n="save.label">Save</span>
+          <span id="save-count" data-i18n="save.label">Save</span>
+          <span id="save-row" data-i18n="save.row" hidden>Save this row</span>
         </span>
         <button id="export" class="ghost small" title="Save a picture of this map and count"
                 data-i18n="save.image" data-i18n-attr="title=save.imageTitle">Image</button>
@@ -267,7 +268,7 @@
   </aside>
 
   <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
-  <div id="file-drop" class="file-drop" hidden><span data-i18n="file.drop">Drop the file to count what is in it</span></div>
+  <div id="file-drop" class="file-drop" hidden><span data-i18n="file.drop">Drop files to count what is in them</span></div>
 
   <div id="coverage" class="sheet" hidden>
     <div class="sheet-backdrop" data-close></div>
@@ -278,77 +279,83 @@
       </div>
 
       <section class="sheet-section sheet-intro">
-        <p class="lede" data-i18n="about.lede">Tally calculates an estimate of the number of people who live inside an
-          area you choose: a shape you draw, a circle round a point, or a whole country.</p>
+        <p class="lede" data-i18n="about.lede">Tally calculates an estimate of the number of people who live inside an area you choose: a shape you draw, a circle around a point, a whole country, or the shapes and points in your own files.</p>
         <p id="about-scope" hidden></p>
         <p id="coverage-live" class="sheet-note" hidden></p>
       </section>
 
-      <section class="sheet-section">
-        <h3 data-i18n="about.sourcesTitle">Where the numbers come from</h3>
-        <p data-i18n="about.sources1">The population figures are Meta's High Resolution Population Density Maps. They
-          spread each country's census over the buildings seen in satellite images, in squares
-          about 30 meters across. Where Meta's maps leave a country out, as they do China,
-          Russia, Pakistan and Canada among 38 places, Tally uses WorldPop's maps, which do
-          the same in squares about 100 meters across. A country's count says which it uses.
-          Most of the figures describe the years 2018 to 2020.</p>
-        <p data-i18n="about.sources2">Tally adds those squares up into hexagons, and counts the hexagons whose center is
-          inside your area. Fine hexagons follow its edge more closely. Country outlines come
-          from geoBoundaries. Where two neighbors' outlines overlap, the overlap is split
-          along the border of geoBoundaries' world map, so no one is counted in both
-          countries. Where both countries' maps hold only their own people, as WorldPop's
-          do, there is no one to split: both keep the overlap.</p>
-        <p data-i18n="about.sources3">Each hexagon holds a whole number of people. Where people live thinly, each person
-          is placed in the likeliest hexagon nearby rather than split into fractions.</p>
-        <p data-i18n="about.sources4">Point at a hexagon on the map, or tap it on a touch screen, to see how many people
-          live in that hexagon alone. Its color shows how densely they live there.</p>
-        <p class="sheet-note" data-i18n="about.disclaimer">These population estimates are based on models and projections,
-          not census counts. They are useful for approximating a population in an area. The
-          estimates are less reliable near coasts, borders, and where populations have grown
-          rapidly. Do not use these estimates for safety or legal decisions. This app makes no
-          determination or claims concerning disputed borders or territories.</p>
+      <!-- What every count rests on, so it is the one loud section: the count's own color. -->
+      <section id="about-care" class="sheet-section sheet-care">
+        <h3 data-i18n="about.careTitle">Use these numbers with care</h3>
+        <p data-i18n="about.caveat1">These population estimates are based on models and projections, not census counts. They are useful for approximating a population in an area. The estimates are less reliable near coasts, borders, and where populations have grown rapidly.</p>
+        <p class="care-rule" data-i18n="about.caveat2">Do not use these estimates for safety or legal decisions.</p>
+        <p data-i18n="about.caveat3">This app makes no determination or claims concerning disputed borders or territories.</p>
       </section>
 
-      <section id="saved" class="saved sheet-section" hidden>
-        <h3 data-i18n="about.privateTitle">Private, and works offline</h3>
-        <p><span data-i18n="about.private">Everything is counted here, in your browser. The
-          shapes you draw and their counts are never sent anywhere.</span><span
-          id="about-visits" hidden> <span data-i18n="about.visits">The site counts page
-          visits, without cookies.</span></span></p>
-        <p class="sheet-note" data-i18n="about.savedNote">Population data comes by country. A country saves itself the
-          first time you count there. Save more below while you are online and you can count
-          in them with no connection at all, though the background map shows only places you
-          have viewed recently. Remove a country to free the space.</p>
-        <ul id="saved-list" class="saved-list"></ul>
-      </section>
-
-      <!-- F-01: the page reloads in the language picked (app.js), keeping the count. -->
-      <section id="language" class="sheet-section">
-        <h3><label for="language-pick" data-i18n="about.languageTitle">Language</label></h3>
-        <select id="language-pick"></select>
+      <section id="settings" class="sheet-section">
+        <h3 data-i18n="about.settingsTitle">Settings</h3>
+        <!-- F-01: the page reloads in the language picked (app.js), keeping the count. -->
+        <div id="language" class="setting">
+          <label for="language-pick" data-i18n="about.languageTitle">Language</label>
+          <select id="language-pick"></select>
+        </div>
         <p class="sheet-note" id="language-draft" data-i18n-html="about.draftNote" hidden>This
           translation is a first draft, not yet checked by a native speaker, and may have
           mistakes. Corrections are welcome on <a href="https://github.com/wmclendon2/tally-maps/issues"
           target="_blank" rel="noopener">GitHub</a>.</p>
+        <div id="units" class="setting">
+          <span data-i18n="about.unitsTitle">Units</span>
+          <div class="seg-group" role="group" aria-label="Units" data-i18n-attr="aria-label=about.unitsTitle">
+            <button class="seg" data-units="metric" aria-pressed="true" data-i18n="about.metric">Metric (km, km²)</button>
+            <button class="seg" data-units="imperial" aria-pressed="false" data-i18n="about.imperial">Imperial (mi, mi²)</button>
+          </div>
+        </div>
       </section>
 
-      <section id="units" class="sheet-section">
-        <h3 data-i18n="about.unitsTitle">Units</h3>
-        <p class="sheet-note" data-i18n="about.unitsNote">For areas, densities, the radius and the map's scale bar.</p>
-        <div class="seg-group" role="group" aria-label="Units" data-i18n-attr="aria-label=about.unitsTitle">
-          <button class="seg" data-units="metric" aria-pressed="true" data-i18n="about.metric">Metric (km, km²)</button>
-          <button class="seg" data-units="imperial" aria-pressed="false" data-i18n="about.imperial">Imperial (mi, mi²)</button>
-        </div>
+      <section class="sheet-section">
+        <h3 data-i18n="about.sourcesTitle">Where the numbers come from</h3>
+        <p data-i18n="about.sources1">Most figures come from Meta's population maps, which spread each country's census over the buildings seen in satellite images, in squares about 30 meters across. For 38 places Meta leaves out, including China, Russia, Pakistan and Canada, Tally uses WorldPop's maps, in squares about 100 meters across. A country's count says which it uses. Most figures describe 2018 to 2020.</p>
+        <p data-i18n="about.sources2">Tally adds those squares up into hexagons, and counts the hexagons whose center is inside your area. Fine hexagons follow its edge more closely.</p>
+        <details class="sheet-more">
+          <summary data-i18n="about.sourcesMore">Borders and whole numbers</summary>
+          <p data-i18n="about.sourcesBorders">Country outlines come from geoBoundaries. Where two neighbors' outlines overlap, the overlap is split along the border of geoBoundaries' world map, so no one is counted in both countries. Where both countries' maps hold only their own people, as WorldPop's do, there is no one to split: both keep the overlap.</p>
+          <p data-i18n="about.sources3">Each hexagon holds a whole number of people. Where people live thinly, each person is placed in the likeliest hexagon nearby rather than split into fractions.</p>
+        </details>
+      </section>
+
+      <section class="sheet-section">
+        <h3 data-i18n="about.mapTitle">Reading the map</h3>
+        <p data-i18n="about.sources4">Point at a hexagon on the map, or tap it on a touch screen, to see how many people live in that hexagon alone. Its color shows how densely they live there.</p>
+      </section>
+
+      <section class="sheet-section">
+        <h3 data-i18n="about.filesTitle">Using files</h3>
+        <p data-i18n="about.files1">The Files tab counts many areas at once. Press Open files, or drop files anywhere on the page. Several files make one list, up to 500 rows and 64 MB in all.</p>
+        <details class="sheet-more">
+          <summary data-i18n="about.filesMore">File formats, the list and saving</summary>
+          <p data-i18n="about.files2">It reads GeoJSON, KML, KMZ, zipped Shapefiles and CSV, with coordinates in latitude and longitude. A CSV needs latitude and longitude columns, and can add name and radius_km (or radius_mi) columns. Points with no radius use the one you set in the tab.</p>
+          <p data-i18n="about.files3">Each shape or point gets a row with its count, and the list adds them up. People in shapes that overlap count once for each shape. Pick a row, in the list or on the map, to see its hexagons. A row that cannot be counted stays in the list and says why.</p>
+          <p data-i18n="about.files4">To come back to a shape or circle later, save it with GeoJSON under its count, then open that file: it returns with the same count, and a circle is still a circle. Save all keeps the whole list, but only its GeoJSON keeps shapes; its CSV keeps points.</p>
+        </details>
+      </section>
+
+      <section class="sheet-section">
+        <h3 data-i18n="about.privateTitle">Private</h3>
+        <p><span data-i18n="about.private">Everything is counted here, in your browser. The shapes you draw, the files you open and their counts are never sent anywhere.</span><span
+          id="about-visits" hidden> <span data-i18n="about.visits">The site counts page visits, without cookies.</span></span></p>
+      </section>
+
+      <section id="saved" class="saved sheet-section" hidden>
+        <h3 data-i18n="about.offlineTitle">Works offline</h3>
+        <p data-i18n="about.savedNote">Population data comes by country. A country saves itself the first time you count there. Save more below while you are online and you can count in them with no connection at all, though the background map shows only places you have viewed recently. Remove a country to free the space.</p>
+        <ul id="saved-list" class="saved-list"></ul>
       </section>
 
       <section id="install-app" class="sheet-section">
         <h3 data-i18n="about.installTitle">Install this app</h3>
-        <p class="sheet-note"><span data-i18n="about.install">Installing puts Tally on your
-          desktop or home screen. It opens in its own window and starts without an internet
-          connection.</span>
-          <span id="install-data-note" data-i18n="about.installData">It installs the app only:
-          population data is saved country by country, above.</span></p>
-        <p class="sheet-note" id="install-how" data-i18n-html="about.installHow">Your browser installs apps from its own menu:
+        <p><span data-i18n="about.install">Installing puts Tally on your desktop or home screen. It opens in its own window and starts without an internet connection.</span>
+          <span id="install-data-note" data-i18n="about.installData">It installs the app only: population data is saved country by country, above.</span></p>
+        <p id="install-how" data-i18n-html="about.installHow">Your browser installs apps from its own menu:
           in Safari, <strong>File › Add to Dock</strong> on a Mac or
           <strong>Share › Add to Home Screen</strong> on an iPhone or iPad. Chrome and Edge
           show an Install button here. Firefox cannot install web apps.</p>
@@ -397,8 +404,8 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=63"></script>
-  <script src="files.js?v=63"></script>
-  <script src="app.js?v=63"></script>
+  <script src="static.js?v=69"></script>
+  <script src="files.js?v=69"></script>
+  <script src="app.js?v=69"></script>
 </body>
 </html>

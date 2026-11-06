@@ -130,11 +130,12 @@ None of these are tracked by git.
 - **Radius:** set the distance, press **Pick a point** and click the map.
 - **Country:** pick a country, or a whole continent at the head of its group, for its population,
   area and density.
-- **File:** press **Open a file**, or drop one anywhere on the page: GeoJSON, KML, KMZ, a zipped
+- **Files:** press **Open files**, or drop them anywhere on the page: GeoJSON, KML, KMZ, a zipped
   Shapefile, or a CSV with `latitude` and `longitude` columns (and `name` and `radius_km` if
-  you have them). Up to 500 rows. Every row is counted and listed; click one for its heatmap,
-  and **Save all** for a CSV or GeoJSON of the list with your file's own columns. The file
-  stays on your device.
+  you have them). Several files make one list, up to 500 rows. Every row is counted and listed;
+  click one for its heatmap, and **Save all** for a CSV or GeoJSON of the list with your files'
+  own columns. A count saved as GeoJSON opens here again, a circle still a circle. Files stay
+  on your device.
 - **Normal / Fine:** Normal answers with a few thousand hexagons; Fine uses hexagons one
   level smaller, which follow the shape's edge more closely.
 - Point at (or tap) a hexagon for its own estimate. The hexagon **?** button opens About

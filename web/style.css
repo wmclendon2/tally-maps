@@ -281,6 +281,8 @@ button:disabled { opacity: .45; cursor: default; }
 .tools-label { font-size: 12.5px; color: var(--muted); }
 .save-label { display: inline-flex; align-items: center; gap: 4px; }
 .save-label svg { width: 14px; height: 14px; fill: currentColor; }
+/* "Save this row" and three buttons do not fit one line in any language: all three stay together. */
+.save-label.own-line { flex-basis: 100%; }
 .result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 12px; }
 .seg-group { display: inline-flex; background: var(--wash); border-radius: 8px; padding: 2px; }
 .seg {
@@ -452,9 +454,9 @@ button:disabled { opacity: .45; cursor: default; }
   background: var(--paper-solid); border-bottom: 1px solid var(--rule);
 }
 .sheet-head h2 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.1px; }
-.sheet-section { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.sheet-section { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--rule); }
 .sheet-section.sheet-intro { margin-top: 0; border-top: 0; }
-.sheet-section h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 600; }
+.sheet-section h3 { margin: 0 0 6px; font-size: 16.5px; font-weight: 600; }
 .sheet-section p { margin: 0 0 10px; }
 .sheet-section p:last-child { margin-bottom: 0; }
 .lede { font-size: 18px; line-height: 1.4; }
@@ -469,6 +471,33 @@ button:disabled { opacity: .45; cursor: default; }
 .sheet-section .seg-group { margin-top: 4px; }
 .sheet-section .seg { padding: 6px 12px; }
 #install { margin-top: 2px; }
+/* The numbers' limits carry the count's color and a mark at the edge: what is said about
+   the count should be seen with the same weight. The rest of the sheet stays quiet. */
+.sheet-section.sheet-care {
+  border-top: 0; padding: 2px 0 2px 16px; border-left: 3px solid var(--count);
+}
+.sheet-care h3 { color: var(--count); }
+.care-rule { font-weight: 600; }
+/* A setting: its name, and the control on the same line. */
+.setting { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; margin-top: 10px; }
+.setting label, .setting > span { font-weight: 500; }
+.setting #language-pick { width: auto; min-width: 11em; flex: 0 1 auto; }
+.setting .seg-group { margin-top: 0; }
+#language-draft { margin: 8px 0 0; }
+/* The longer answer, a click away: the same disclosure as the saved continents. */
+.sheet-more { margin-top: 2px; }
+.sheet-more summary {
+  display: flex; align-items: center; gap: 8px; min-height: 36px; font-weight: 500; cursor: pointer;
+  list-style: none;
+}
+.sheet-more summary::-webkit-details-marker { display: none; }
+.sheet-more summary::before {
+  content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 0 2px;
+  border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(-45deg);
+  transition: transform .15s ease;
+}
+.sheet-more[open] summary::before { transform: rotate(45deg); }
+.sheet-more p { margin: 4px 0 10px; }
 
 .credits {
   display: grid; grid-template-columns: 6.2em 1fr; gap: 8px 12px; margin: 6px 0 0;

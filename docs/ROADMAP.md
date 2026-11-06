@@ -592,3 +592,4 @@ Candidates still open:
 | F-02 | Open a file of shapes or points (GeoJSON, KML, KMZ, Shapefile, CSV): up to 500 rows counted on the device, each listed with a sum, click one for its heatmap, save all as CSV or GeoJSON | 2026-11-05 |
 | F-33 | Whole continents in the Country tab: total, density map and saving, from small overview packs (350 KB for all six) | 2026-11-05 |
 | F-25 | Big countries and big shapes in seconds, from small overview packs (India 46 MB and 45 s on a slowed phone, now 0.3 MB and 2 s) | 2026-11-05 |
+| F-41 | Round trip: a saved circle reopens as a circle, with its center, radius and count; a saved country or continent reopens in the Country tab; several files open as one list; saved files say what they hold (tally-radius-..., tally-country-cameroon-...) | 2026-11-06 |

@@ -20,6 +20,7 @@ import csv
 import io
 import json
 import math
+import re
 import shutil
 import struct
 import sys
@@ -327,6 +328,277 @@ def people(text: str) -> int:
     return int(text.replace(",", "")) if text.replace(",", "").isdigit() else -1
 
 
+SHOWN_JS = """() => ({
+    total: lastResult?.total,
+    cells: lastResult?.cells?.length,
+    selected: fileSet?.selected,
+    caption: document.querySelector('#counted').textContent,
+    saveAll: !document.querySelector('#file-save').hidden,
+    saveRow: !document.querySelector('#save-row').hidden,
+    hint: !document.querySelector('#file-hint').hidden,
+})"""
+FACTS_JS = """() => fileSet.rows.map(r => ({
+    name: rowName(r), kind: r.kind, center: r.center ?? null, radiusKm: r.radiusKm ?? null,
+    drawn: !!r.drawn, props: r.props, total: r.result?.total ?? null,
+}))"""
+
+
+def count_now(page, script: str, *arg) -> int:
+    page.evaluate(script, *arg)
+    page.wait_for_function("() => !inflight && lastResult", timeout=120000)
+    return page.evaluate("() => lastResult.total")
+
+
+def save(page, button: str, path: Path) -> Path:
+    with page.expect_download() as d:
+        page.click(button)
+    shutil.copy(d.value.path(), path)
+    SAVED_AS[path] = d.value.suggested_filename
+    return path
+
+
+SAVED_AS: dict[Path, str] = {}
+
+
+def named(path: Path, label: str) -> bool:
+    """Was this file offered as tally-<label>-<date>.<ext>?"""
+    return (
+        re.fullmatch(rf"tally-{label}-\d{{12}}{re.escape(path.suffix)}", SAVED_AS[path]) is not None
+    )
+
+
+def shown_row(page, *paths: Path) -> dict:
+    open_file(page, *paths)
+    page.wait_for_function("() => !inflight && selectedRow() && lastResult", timeout=120000)
+    return page.evaluate(SHOWN_JS)
+
+
+def round_trip(page, where: Path, check: Check) -> None:
+    """Save a count, open it again: what comes back is what was saved (F-41)."""
+    console.print("[bold]Round trip[/bold]")
+    center, km = [11.5167, 3.8667], 4.828032
+    shape = {
+        "type": "Polygon",
+        "coordinates": [[[11.45, 3.8], [11.6, 3.8], [11.6, 3.95], [11.47, 3.97], [11.45, 3.8]]],
+    }
+
+    circle_total = count_now(
+        page,
+        """([c, k]) => { closeFile(); setMode('radius'); lastResult = null;
+             radiusCenter = c; radiusKm = k; showRadius(); queryRadius(); }""",
+        [center, km],
+    )
+    first_caption = page.text_content("#counted")
+    circle_file = save(page, "#export-geojson", where / "circle.geojson")
+    check("a circle's file says radius", named(circle_file, "radius"), SAVED_AS[circle_file])
+    shown = shown_row(page, circle_file)
+    row = page.evaluate(FACTS_JS)[0]
+    check("a saved circle comes back a circle", row["kind"] == "circle", row)
+    check("at its center and radius", row["center"] == center and row["radiusKm"] == km, row)
+    check("with the same count", row["total"] == circle_total == shown["total"], row)
+    check("named by its radius, not a title", row["name"].startswith("Within "), row)
+    check("said as when first counted", shown["caption"] == first_caption, shown)
+    check("one row: its hexagons come up unasked", shown["cells"] > 0, shown)
+    check("one row: no Save all", not shown["saveAll"], shown)
+    check("one row: Save stays Save", not shown["saveRow"], shown)
+    check("none of the saved columns count as the file's own", row["props"] == {}, row)
+
+    again = save(page, "#export-geojson", where / "circle_again.geojson")
+    shown_row(page, again)
+    back = page.evaluate(FACTS_JS)[0]
+    check(
+        "saved and opened twice, the same circle",
+        (back["center"], back["radiusKm"], back["name"], back["total"], back["props"])
+        == (center, km, row["name"], circle_total, {}),
+        back,
+    )
+
+    shape_total = count_now(
+        page,
+        "g => { closeFile(); setMode('shape'); lastResult = null; queryPopulation(g); }",
+        shape,
+    )
+    first_caption = page.text_content("#counted")
+    shape_file = save(page, "#export-geojson", where / "drawn.geojson")
+    check("a drawn shape's file says shape", named(shape_file, "shape"), SAVED_AS[shape_file])
+    shown = shown_row(page, shape_file)
+    row = page.evaluate(FACTS_JS)[0]
+    check("a drawn shape comes back a shape", row["kind"] == "shape" and row["drawn"], row)
+    check("with the same count", row["total"] == shape_total == shown["total"], row)
+    check("said as when first counted", shown["caption"] == first_caption, shown)
+    check("called a drawn shape", row["name"] == "Drawn shape", row)
+
+    def last(path: Path) -> dict:
+        return json.loads(path.read_text())["features"][-1]
+
+    two = where / "two.geojson"
+    features = [last(circle_file), last(shape_file)]
+    two.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
+    open_file(page, two)
+    shown = page.evaluate(SHOWN_JS)
+    check("two rows: neither picked unasked", shown["selected"] is None, shown)
+    check("two rows: Save all and the hint", shown["saveAll"] and shown["hint"], shown)
+    page.locator("#file-rows li").nth(0).locator("button").click()
+    page.wait_for_function("() => !inflight && selectedRow()", timeout=120000)
+    shown = page.evaluate(SHOWN_JS)
+    check("a picked row: Save this row, no hint", shown["saveRow"] and not shown["hint"], shown)
+    both = page.evaluate(FACTS_JS)
+    saved_all = save(page, "#file-geojson", where / "two_saved.geojson")
+    check("a list's file says list", named(saved_all, "list"), SAVED_AS[saved_all])
+    open_file(page, saved_all)
+    check("Save all, GeoJSON: the same rows back", page.evaluate(FACTS_JS) == both)
+    slug = page.evaluate('() => fileSlug("Côte d\'Ivoire / ../x")')
+    check("a name is made safe for a file", slug == "cote-d-ivoire-x", slug)
+    only_circle = where / "one_in_list.csv"
+    open_file(page, two)
+    with_csv = save(page, "#file-csv", only_circle)
+    rows = {r["name"]: r for r in csv.DictReader(io.StringIO(with_csv.read_text("utf-8-sig")))}
+    check("Save all, CSV: says which Tally named", rows["Drawn shape 2"]["drawn"] == "true", rows)
+
+    whole = count_now(
+        page,
+        """() => { closeFile(); setMode('country'); lastResult = null;
+             const pick = document.querySelector('#country-pick');
+             pick.value = 'CMR'; pick.dispatchEvent(new Event('change')); }""",
+    )
+    country_file = save(page, "#export-geojson", where / "country.geojson")
+    check(
+        "a country's file names it", named(country_file, "country-cameroon"), SAVED_AS[country_file]
+    )
+    page.evaluate("() => { clearAll(); lastResult = null; setMode('file'); }")
+    page.set_input_files("#file-input", str(country_file))
+    page.wait_for_function("() => !inflight && lastResult", timeout=120000)
+    back = page.evaluate(
+        """() => ({ file: !!fileSet, total: lastResult.total, picked: lastCountry,
+             tab: !document.querySelector('#mode-country').hidden })"""
+    )
+    check(
+        "a saved country opens as that country",
+        back == {"file": False, "total": whole, "picked": "CMR", "tab": True},
+        back,
+    )
+    old = json.loads(country_file.read_text())
+    del old["features"][-1]["properties"]["country_code"]
+    old_country = where / "old_country.geojson"
+    old_country.write_text(json.dumps(old))
+    page.evaluate("() => { clearAll(); lastResult = null; setMode('file'); }")
+    page.set_input_files("#file-input", str(old_country))
+    page.wait_for_function("() => !inflight && lastResult", timeout=120000)
+    check("an older file too", page.evaluate("lastCountry") == "CMR")
+    rows = open_file(page, country_file, circle_file)
+    check("in a list, it says where to find it", "Country tab" in rows[0]["note"], rows[0])
+    check("and the list still counts the rest", people(rows[1]["value"]) == circle_total, rows[1])
+
+    moved = last(circle_file)
+    ring = moved["geometry"]["coordinates"][0]
+    moved["geometry"]["coordinates"][0] = [[x + 0.05, y] for x, y in ring]
+    moved_file = where / "moved.geojson"
+    moved_file.write_text(json.dumps(moved))
+    shown_row(page, moved_file)
+    row = page.evaluate(FACTS_JS)[0]
+    check("an outline moved in a map tool stays a shape", row["center"] is None, row)
+    check("and counts where it now is", row["total"] != circle_total, row)
+
+    old = last(circle_file)
+    for key in ("latitude", "longitude", "radius_km", "drawn"):
+        del old["properties"][key]
+    old["properties"]["name"] = "Population within 5 km of 3.867°N, 11.517°E"
+    old_circle = where / "old_circle.geojson"
+    old_circle.write_text(json.dumps(old))
+    shown = shown_row(page, old_circle)
+    row = page.evaluate(FACTS_JS)[0]
+    check("an older file: its circle stays a shape", row["center"] is None, row)
+    check("an older file: its count too", row["total"] == circle_total, row)
+    check(
+        "an older file: no doubled words",
+        shown["caption"].endswith("within 5 km of 3.867°N, 11.517°E"),
+        shown,
+    )
+
+    old = last(shape_file)
+    del old["properties"]["drawn"]
+    old["properties"]["name"] = "Population inside a drawn shape"
+    old_shape = where / "old_shape.geojson"
+    old_shape.write_text(json.dumps(old))
+    shown = shown_row(page, old_shape)
+    row = page.evaluate(FACTS_JS)[0]
+    check("an older file: called a drawn shape", row["name"] == "Drawn shape", row)
+    check("an older file: no doubled words", "Population" not in shown["caption"], shown)
+
+
+def several_files(page, where: Path, paths: dict[str, Path], check: Check) -> None:
+    """Everything picked makes one list, or the file that stopped it is named."""
+    console.print("[bold]Several files at once[/bold]")
+    circle_file, drawn_file = where / "circle.geojson", where / "drawn.geojson"
+    alone = []
+    for path in (circle_file, drawn_file):
+        shown_row(page, path)
+        alone.append(page.evaluate(FACTS_JS)[0])
+    open_file(page, circle_file, drawn_file)
+    together = page.evaluate(FACTS_JS)
+    got = [{k: v for k, v in r.items() if k != "name"} for r in together]
+    wanted = [{k: v for k, v in r.items() if k != "name"} for r in alone]
+    check("two saved files: one list, in order", got == wanted, together)
+    check(
+        "a drawn shape in a list has its row number",
+        together[1]["name"] == "Drawn shape 2",
+        together,
+    )
+    title = page.text_content("#file-name")
+    check("named for both", title == "circle.geojson, drawn.geojson", title)
+    shown = page.evaluate(SHOWN_JS)
+    check("two rows: neither picked unasked", shown["selected"] is None, shown)
+    check("two rows: Save all and the hint", shown["saveAll"] and shown["hint"], shown)
+
+    second = where / "drawn_second.geojson"
+    shutil.copy(drawn_file, second)
+    open_file(page, drawn_file, second)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("two drawn shapes can be told apart", names == ["Drawn shape 1", "Drawn shape 2"], names)
+    saved_again = save(page, "#file-geojson", where / "both_drawn.geojson")
+    open_file(page, saved_again)
+    names = [r["name"] for r in page.evaluate(FACTS_JS)]
+    check("and keep their numbers once saved", names == ["Drawn shape 1", "Drawn shape 2"], names)
+    shown_row(page, drawn_file)
+    check("alone, no number", page.evaluate(FACTS_JS)[0]["name"] == "Drawn shape")
+
+    point = where / "point.csv"
+    point.write_text("latitude,longitude,radius_km\n3.8667,11.5167,5\n")
+    unnamed = where / "unnamed.geojson"
+    box_shape = {
+        "type": "Polygon",
+        "coordinates": [[[11.45, 3.8], [11.6, 3.8], [11.6, 3.95], [11.45, 3.95], [11.45, 3.8]]],
+    }
+    unnamed.write_text(json.dumps(box_shape))
+    mixed = open_file(page, unnamed, point, paths["loose/zones.dbf"], paths["loose/zones.shp"])
+    names = [r["name"] for r in mixed]
+    check(
+        "any formats together, a Shapefile's parts as one, numbered through",
+        names == ["Shape 1", "Point 2", "Yaounde", "Douala"],
+        names,
+    )
+
+    def stopped(*files: Path) -> str:
+        page.evaluate(
+            "() => { document.querySelector('#status').textContent = ''; if (fileSet) closeFile(); }"
+        )
+        page.set_input_files("#file-input", [str(f) for f in files])
+        page.wait_for_function(
+            "() => document.querySelector('#status.error')?.textContent", timeout=30000
+        )
+        return page.text_content("#status")
+
+    bad = where / "bad.geojson"
+    bad.write_text("not json")
+    said = stopped(unnamed, bad)
+    check("a file that cannot be read is named", "bad.geojson" in said, said)
+    check("and no list is left to look complete", page.evaluate("() => !fileSet"), said)
+    said = stopped(unnamed, paths["loose/zones.dbf"])
+    check("a Shapefile part with no .shp is named", "zones.dbf" in said, said)
+    said = stopped(paths["grid_500.geojson"], unnamed)
+    check("the row limit covers them together", "These files have 501 rows" in said, said)
+
+
 def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> None:
     from playwright.sync_api import sync_playwright
 
@@ -479,8 +751,12 @@ def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> Non
         with page.expect_download() as d:
             page.click("#export-geojson")
         shutil.copy(d.value.path(), tally_file)
+        offered = d.value.suggested_filename
+        check("a named row's file gives its name", "shape-yaounde-" in offered, offered)
         single = open_file(page, tally_file)
         check("a single count's file is one row, not its hexagons", len(single) == 1, len(single))
+        round_trip(page, again.parent, check)
+        several_files(page, again.parent, paths, check)
 
         console.print("[bold]Other formats[/bold]")
         rows = open_file(page, paths["zones.kml"])
@@ -576,10 +852,12 @@ def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> Non
         fr.goto(url + "?lang=fr")
         fr.wait_for_function("() => TallyI18n && document.querySelector('#tab-file')")
         fr.wait_for_function(
-            "() => document.querySelector('#tab-file').textContent === 'Fichier'", timeout=10000
+            "() => document.querySelector('#tab-file').textContent === 'Fichiers'", timeout=10000
         )
         fr.click("#tab-file")
-        check("the tab is in French", fr.text_content("#file-open").strip() == "Ouvrir un fichier")
+        check(
+            "the tab is in French", fr.text_content("#file-open").strip() == "Ouvrir des fichiers"
+        )
         fr.close()
 
         console.print("[bold]Offline[/bold]")
