@@ -9,10 +9,10 @@ Read it before changing the pipeline, the pack format or the resolver.
 
 - **A static app, no server or database.** `scripts/build_packs.py` turns rasters into
   per-country packs in `data/packs/`; `scripts/build_static.py` writes `dist/` = `web/` +
-  packs + the no-data mask; `web/static.js` answers in the browser. All 196 Meta countries
+  packs + the no-data mask; `web/static.js` answers in the browser; `web/files.js` reads a
+  file of shapes or points into rows for the File tab (F-02). All 196 Meta countries
   have packs (Jersey's from WorldPop), plus 37 from WorldPop (233). `ingest/resolve.py` is the Python reference
-  for static.js's resolution rule. (API mode, PostGIS + FastAPI, was retired on 2026-10-15;
-  batch upload, F-02, is planned in the browser.)
+  for static.js's resolution rule. (API mode, PostGIS + FastAPI, was retired on 2026-10-15.)
 - Data: Meta HRSL 30 m via HDX (`ingest/hdx.py`), WorldPop 100 m where Meta has no data
   (38 places, `ingest.config.WORLDPOP_COUNTRIES`; `ingest/worldpop_hub.py`; Norfolk Island's
   people go in Australia's pack and the Palestinian Territories' in East Jerusalem in
@@ -31,7 +31,7 @@ Read it before changing the pipeline, the pack format or the resolver.
   a refusal (never a silent coarser answer). **Change both together**
   and run `scripts/browser_parity.py`. `browser_countries.py`'s `country_resolution` ports
   `countryResolution` in static.js.
-- Shell versioning: `index.html` loads `app.js?v=N`, `static.js?v=N`, `style.css?v=N`,
+- Shell versioning: `index.html` loads `app.js?v=N`, `static.js?v=N`, `files.js?v=N`, `style.css?v=N`,
   `i18n.js?v=N` (which fetches `i18n/<lang>.json?v=N`), and `sw.js` sets
   `SHELL_VERSION = "N"`. **Bump both on any change to a versioned asset or a language file**
   (`tests/test_web_shell.py` fails if they drift). Only navigations use `ignoreSearch`
@@ -52,6 +52,10 @@ Read it before changing the pipeline, the pack format or the resolver.
   visitor's locale), never `toLocaleString("en-US")`. Exported keys stay English.
   `tests/test_i18n.py` checks all of it. A new language: its file, `LANGUAGES` in
   `i18n.js`, and the list in `sw.js`.
+- A file's rows (F-02) go through `TallyStatic.query` one by one, each at its own level, so a
+  row equals the same shape drawn. A row is never dropped: what cannot be counted stays in
+  the list and says why. A list keeps numbers only, never a row's hexagons. `scripts/browser_files.py`
+  checks it; a new format goes in there too.
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
   `tolerance: 0` on the `population-cells` source (otherwise sub-pixel hexes vanish when
   zoomed out).
@@ -155,6 +159,8 @@ Always run uv as `UV_CACHE_DIR=.uv-cache uv ...` (the cache lives in `./.uv-cach
   and `scripts/browser_update.py [--dist DIR]` (a tab left open across a release, F-31;
   needs three one-part countries in the build). All three run in the sandbox: they serve
   on a local port inside the process.
+- Files: `UV_CACHE_DIR=.uv-cache uv run --group browser python scripts/browser_files.py [--dist DIR]`
+  (`make files-check`; needs CMR and FJI in the build).
 - Verify: `UV_CACHE_DIR=.uv-cache uv run python scripts/verify_country.py --country CMR`
   and `scripts/verify_cities.py [--country XXX] [--min-pop 0]`.
 - Catalog: `uv run python -m ingest.hdx` (Meta's countries and download sizes).

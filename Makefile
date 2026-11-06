@@ -8,7 +8,7 @@ COUNTRIES ?= CMR CAF
 PORT ?= 8081
 COUNTRY_FLAGS := $(foreach c,$(COUNTRIES),--country $(c))
 
-.PHONY: help setup catalog packs site serve demo test lint check browser-setup parity countries-check verify overlaps split update-check
+.PHONY: help setup catalog packs site serve demo test lint check browser-setup parity countries-check files-check verify overlaps split update-check
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-16s %s\n", $$1, $$2}'
@@ -47,6 +47,9 @@ browser-setup: ## Install the browser checks' headless Chromium (once)
 
 parity: ## Compare the browser's answers with the Python resolver (needs browser-setup and a built dist/)
 	uv run --group browser python scripts/browser_parity.py
+
+files-check: ## Open real files through the File tab and check every row (needs browser-setup and a built dist/)
+	uv run --group browser python scripts/browser_files.py
 
 countries-check: ## Check every country in dist/ in the browser, and its memory use
 	uv run --group browser python scripts/browser_countries.py

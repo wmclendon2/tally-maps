@@ -71,6 +71,15 @@ def test_every_vendored_asset_the_page_loads_exists_and_is_precached():
         assert f'"./{url}"' in SW, f"sw.js must precache {url} for offline use"
 
 
+def test_every_library_files_js_loads_exists_and_is_precached():
+    """Loaded when a file is opened (F-02), not by the page, so page_assets does not see them."""
+    scripts = re.findall(r'"(vendor/[^"]+\.js)"', (WEB / "files.js").read_text())
+    assert len(scripts) == 2
+    for url in scripts:
+        assert (WEB / url).exists(), url
+        assert f'"./{url}"' in SW, f"sw.js must precache {url} for offline use"
+
+
 def test_service_worker_no_longer_caches_unpkg():
     assert "unpkg" not in SW
 

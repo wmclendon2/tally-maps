@@ -34,6 +34,22 @@
     },
     "license_from": "https://raw.githubusercontent.com/JamesLMilner/terra-draw/main/LICENSE"
   },
+  "@tmcw/togeojson@7.1.3": {
+    "version": "7.1.3",
+    "tarball": "https://registry.npmjs.org/@tmcw/togeojson/-/togeojson-7.1.3.tgz",
+    "files": {
+      "togeojson.umd.js": "d3b7dabd4a9ca9b53821998a2982fbdc4fc9e644c96aa35cb0ced2efcbec2148",
+      "LICENSE": "7cb180a3e5857ed9f27742bee2371b0a3055e3d302877ed91f62f390a12f5080"
+    }
+  },
+  "shpjs@6.2.0": {
+    "version": "6.2.0",
+    "tarball": "https://registry.npmjs.org/shpjs/-/shpjs-6.2.0.tgz",
+    "files": {
+      "shp.min.js": "3380a08babfcc8411e5fa7693a4cc443627e43200b0489c81173a55ff1439ca0",
+      "LICENSE.md": "2de371ae03e427342d4c7aacdf295d5ce98476b5fbe951d66ce11aa009613894"
+    }
+  },
   "@fontsource/barlow@5.3.0": {
     "version": "5.3.0",
     "tarball": "https://registry.npmjs.org/@fontsource/barlow/-/barlow-5.3.0.tgz",

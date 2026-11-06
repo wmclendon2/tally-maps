@@ -33,9 +33,9 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=60">
+  <link rel="stylesheet" href="style.css?v=61">
   <!-- The interface's languages (F-01): first, so the strings load while the map does. -->
-  <script src="i18n.js?v=60"></script>
+  <script src="i18n.js?v=61"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -93,6 +93,8 @@
               aria-selected="false" tabindex="-1" data-i18n="mode.radius">Radius</button>
       <button class="mode" role="tab" id="tab-country" data-mode="country" aria-controls="mode-country"
               aria-selected="false" tabindex="-1" data-static-only hidden data-i18n="mode.country">Country</button>
+      <button class="mode" role="tab" id="tab-file" data-mode="file" aria-controls="mode-file"
+              aria-selected="false" tabindex="-1" data-i18n="mode.file">File</button>
     </div>
 
     <section id="mode-shape" class="mode-pane" role="tabpanel" aria-labelledby="tab-shape">
@@ -141,6 +143,65 @@
       <select id="country-pick">
         <option value="" data-i18n="country.choose">Choose a country…</option>
       </select>
+    </section>
+
+    <!-- F-02: a file of shapes or points, read and counted on this device. -->
+    <section id="mode-file" class="mode-pane" role="tabpanel" aria-labelledby="tab-file" hidden>
+      <div id="file-start">
+        <p class="how" data-i18n="file.how">Count every shape or point in a file: GeoJSON, KML, KMZ, a zipped Shapefile, or a
+          CSV with latitude and longitude. It stays on this device; nothing is uploaded.</p>
+        <div class="actions">
+          <button id="file-open" class="primary">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4l2 2h7A1.5 1.5 0 0 1 18 6.5V8H2V4.5zM2 9.5h16v6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 15.5v-6z"/></svg>
+            <span data-i18n="file.open">Open a file</span>
+          </button>
+        </div>
+        <input id="file-input" type="file" multiple hidden aria-label="Open a file"
+               data-i18n-attr="aria-label=file.open">
+      </div>
+      <div id="file-list" hidden>
+        <div class="file-head">
+          <div class="file-title">
+            <span id="file-name" class="file-title-name"></span>
+            <span id="file-size" class="file-title-size"></span>
+          </div>
+          <button id="file-close" class="count-close file-close" aria-label="Close this file"
+                  title="Close this file" data-i18n-attr="aria-label=file.close;title=file.close">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.7 4.3 10 8.6l4.3-4.3 1.4 1.4L11.4 10l4.3 4.3-1.4 1.4L10 11.4l-4.3 4.3-1.4-1.4L8.6 10 4.3 5.7z"/></svg>
+          </button>
+        </div>
+        <p class="how file-radius-row" id="file-radius-row" hidden>
+          <label for="file-radius" data-i18n="file.radiusBefore">Points with no radius: everyone within</label>
+          <input id="file-radius" type="number" min="0.1" max="2000" step="any" inputmode="decimal">
+          <span id="file-radius-unit">km</span>.
+        </p>
+        <div class="file-columns" aria-hidden="true">
+          <span data-i18n="file.colName">Name</span>
+          <span data-i18n="file.colPeople">People (est.)</span>
+        </div>
+        <ol id="file-rows" class="file-rows"></ol>
+        <div class="file-sum" id="file-sum-row" hidden>
+          <span id="file-sum-label"></span>
+          <span id="file-sum" class="file-value"></span>
+        </div>
+        <p class="file-small" id="file-overlap" hidden data-i18n="file.overlap">People in overlapping shapes count once for each shape.</p>
+        <p class="file-small" id="file-skipped" hidden></p>
+        <div class="file-run">
+          <p class="file-small" id="file-progress"></p>
+          <button id="file-stop" class="ghost small" hidden data-i18n="file.stop">Stop</button>
+          <button id="file-rest" class="ghost small" hidden data-i18n="file.rest">Count the rest</button>
+        </div>
+        <div class="result-actions" id="file-save" role="group" aria-labelledby="file-save-label" hidden>
+          <span class="tools-label save-label" id="file-save-label">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v9.6l3.3-3.3 1.4 1.4L10 14.4 5.3 9.7l1.4-1.4L10 11.6V2zM3 15h14v2H3z"/></svg>
+            <span data-i18n="file.saveAll">Save all</span>
+          </span>
+          <button id="file-csv" class="ghost small" title="Save every row as a spreadsheet (CSV), with the file's own columns"
+                  data-i18n-attr="title=file.csvTitle">CSV</button>
+          <button id="file-geojson" class="ghost small" title="Save every shape with its people (GeoJSON), for QGIS and other map tools"
+                  data-i18n-attr="title=file.geojsonTitle">GeoJSON</button>
+        </div>
+      </div>
     </section>
 
     <div id="result" hidden>
@@ -206,6 +267,7 @@
   </aside>
 
   <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
+  <div id="file-drop" class="file-drop" hidden><span data-i18n="file.drop">Drop the file to count what is in it</span></div>
 
   <div id="coverage" class="sheet" hidden>
     <div class="sheet-backdrop" data-close></div>
@@ -315,7 +377,7 @@
             <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap
             contributors</a> (ODbL).</dd>
           <dt data-i18n="about.creditSoftware">Software</dt>
-          <dd data-i18n="about.creditSoftwareText">MapLibre GL JS, h3-js and Terra Draw. Type set in Barlow by Jeremy Tribby
+          <dd data-i18n="about.creditSoftwareText">MapLibre GL JS, h3-js, Terra Draw, togeojson and shpjs. Type set in Barlow by Jeremy Tribby
             (SIL Open Font License).</dd>
         </dl>
       </section>
@@ -335,7 +397,8 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=60"></script>
-  <script src="app.js?v=60"></script>
+  <script src="static.js?v=61"></script>
+  <script src="files.js?v=61"></script>
+  <script src="app.js?v=61"></script>
 </body>
 </html>

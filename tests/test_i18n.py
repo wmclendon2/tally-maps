@@ -24,6 +24,7 @@ LANG_FILES = sorted(I18N.glob("*.json"))
 LOADER = (WEB / "i18n.js").read_text()
 APP = (WEB / "app.js").read_text()
 STATIC = (WEB / "static.js").read_text()
+FILES = (WEB / "files.js").read_text()
 INDEX = (WEB / "index.html").read_text()
 
 # Keys app.js builds from a value (`coord.${...}`), and names a language may add.
@@ -143,7 +144,7 @@ def test_index_html_says_what_en_json_says():
 def used_keys() -> set[str]:
     """Every key literal in the code: t("..."), said(..., "...") and data-i18n*."""
     namespaces = {k.split(".")[0] for k in EN if "." in k}
-    literals = set(re.findall(r'"([a-z]+\.[A-Za-z]+)"', APP + STATIC))
+    literals = set(re.findall(r'"([a-z]+\.[A-Za-z]+)"', APP + STATIC + FILES))
     keys = {k for k in literals if k.split(".")[0] in namespaces}
     for attrs, _ in MARKED:
         keys |= {attrs[a] for a in ("data-i18n", "data-i18n-html") if a in attrs}

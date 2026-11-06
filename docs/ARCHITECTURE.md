@@ -138,7 +138,19 @@ The page grays out land it has no data for (`build_static.no_data`, from Natural
 minus the built countries' outlines). The **Country** tab sums a country's own packs at
 one level, with no outline or polyfill.
 
-**App shell and service worker.** `index.html` loads `static.js?v=N`, `app.js?v=N` and
+**A file of shapes or points** (F-02). The **File** tab reads GeoJSON, CSV, KML, KMZ and
+Shapefiles (zipped or loose) in the page: nothing is uploaded. `web/files.js` turns a file
+into rows; `togeojson` and `shpjs` load only when such a file is opened, and the service
+worker caches them for offline use. `app.js` sends each row through `TallyStatic.query`
+one at a time, at its own level, so a row's number is what drawing that shape would give,
+and keeps only the row's numbers: its hexagons are counted again when it is picked. Rows
+that cannot be counted stay in the list and say why, and the Save buttons carry the file's
+own columns. A file over 500 rows or 64 MB is refused, not cut short. The sum of the rows
+is shown with a note that people in overlapping shapes count once per shape; shapes that
+adjoin and land on one level partition exactly (500 in Cameroon: the sum equals the box
+at that level), and shapes on different levels stayed within 0.22% (649 zones).
+
+**App shell and service worker.** `index.html` loads `static.js?v=N`, `files.js?v=N`, `app.js?v=N` and
 `style.css?v=N` and `i18n.js?v=N`, and `sw.js` sets `SHELL_VERSION = "N"`. Both change together on every change
 to one of those files (`tests/test_web_shell.py` fails if they drift). This exists because a
 cached `app.js` once paired with a newer page that no longer sent a field it read: the map

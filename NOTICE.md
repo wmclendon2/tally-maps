@@ -51,6 +51,8 @@ license file):
 | [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js) | BSD-3-Clause |
 | [h3-js](https://github.com/uber/h3-js) | Apache-2.0 |
 | [Terra Draw](https://github.com/JamesLMilner/terra-draw) and its MapLibre adapter | MIT |
+| [togeojson](https://github.com/placemark/togeojson) (reads KML) | BSD-2-Clause |
+| [shpjs](https://github.com/calvinmetcalf/shapefile-js) (reads Shapefiles; bundles proj4js, MIT) | MIT |
 | [Barlow and Barlow Semi Condensed](https://github.com/jpt/barlow) fonts, packaged by [Fontsource](https://fontsource.org) | SIL Open Font License 1.1 |
 
 The build and ingest tools use further open-source Python packages, listed in

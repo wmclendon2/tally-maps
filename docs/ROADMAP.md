@@ -18,7 +18,6 @@ but it is a deliberate choice.
 
 | ID | Feature | Stage | Effort | Value | Privacy | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| F-02 | Upload polygons (SHP/GeoJSON/KML/GPKG), batch results | Shaped | M–L | ★★★ | ✅ | — |
 | F-05 | Shareable link to a shape (in the URL fragment) | Inbox | S | ★★ | ✅ | — |
 | F-06 | Pick a region or district instead of drawing | Parked (country level shipped) | M | ★★★ | ✅ | ADM1/ADM2 outlines |
 | F-07 | Age and sex breakdown (Meta's women, under-5s, youth, 60+ layers) | Parked | L | ★★★ | ✅ | Pack format minor bump |
@@ -38,6 +37,7 @@ but it is a deliberate choice.
 | F-35 | Detail limits: measure the cost and accuracy of more cells | Inbox | S (M if it leads to a change) | ★★ | ✅ | After F-34 |
 | F-36 | WorldPop everywhere: one source for every country | Inbox (for a future decision) | M–L | ★★ | ✅ | F-32 |
 | F-38 | Atolls and small islands: people outside a coarse outline (Tarawa: 4,740) | Inbox | S–M | ★★ | ✅ | — |
+| F-40 | Open GeoPackage files in the File tab (F-02), with `sql.js` loaded only when one is opened | Inbox | M | ★★ | ✅ | — |
 
 Numbers missing from this board (F-24) are items about the hosted site, which this repo
 does not cover.
@@ -103,6 +103,16 @@ does not cover.
 - **Risks:** multipolygons and holes need parity tests; large batches should run in a Web
   Worker so the map stays responsive.
 - **Effort:** M for GeoJSON + KML + SHP with a table and CSV; L with GeoPackage and a worker.
+- **Decided 2026-11-05:** GeoJSON, KML, zipped Shapefile and CSV of points first (KMZ and loose
+  Shapefiles came cheaply; GeoPackage waits). A fourth tab, **File**, with the list in the
+  panel: name and people on each line, and a picked row's area, density and heatmap in the
+  usual count below it. A sum of the rows, with a note that people in overlapping shapes
+  count once per shape. Each row is counted at its own level, the same number as drawing it:
+  across 649 zones around Douala and Yaoundé that summed to within 0.22% of the finest level
+  with a typical zone 0.0% off, where one shared level (res 8, res 7) put a typical zone 1.4%
+  and 8.6% off. Limits: 500 rows and 64 MB, refused with a message rather than cut short.
+- **Built:** on the main thread, a row at a time; 500 shapes took 9.1 s and left the page at
+  19 MB, so no Web Worker yet. Revisit if a real file stalls the map.
 
 ### F-10 WorldPop for the countries Meta lacks
 - **Why:** the largest gap in coverage. About 30 countries and 12 territories have no Meta
@@ -569,3 +579,4 @@ Candidates still open:
 | F-37 | People across the 180° line: Fiji +14,298 (Taveuni, Lau), New Zealand +627 (Chatham Islands) | 2026-11-01 |
 | F-01 | French, Spanish, Portuguese and Indonesian (drafts, corrections invited): the panel, About, errors, the saved image and the map's place names; a globe beside the ? to switch | 2026-11-02 |
 | F-39 | People past the 180° line: a Radius circle or drawn shape across it is counted in full (50 km on Taveuni: 15,103, was 9,272) | 2026-11-05 |
+| F-02 | Open a file of shapes or points (GeoJSON, KML, KMZ, Shapefile, CSV): up to 500 rows counted on the device, each listed with a sum, click one for its heatmap, save all as CSV or GeoJSON | 2026-11-05 |

@@ -182,7 +182,7 @@ function panelPadding() {
 }
 
 function bboxOf(geometry) {
-  let w = 180, s = 90, e = -180, n = -90;
+  let w = Infinity, s = 90, e = -Infinity, n = -90;
   const polys = geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
   for (const rings of polys)
     for (const [x, y] of rings[0]) {
@@ -297,6 +297,7 @@ let polygonMode;
 
 map.on("load", () => {
   addHeatLayers();
+  addFileLayers();
   addRadiusLayers();
   addSketchLayers();
 
@@ -614,6 +615,9 @@ setInterval(() => {
 // country. The tab (Shape, Radius, Country) and the settings are kept already.
 const KEPT_COUNT = "tally-kept-count";
 function keepCount() {
+  keepFile();
+  // A row of a file comes back with its file, which knows which row it was.
+  if (fileSet?.selected != null) return;
   const kept = lastCountry
     ? { country: lastCountry }
     : radiusCenter
@@ -627,6 +631,7 @@ function keepCount() {
 }
 
 function restoreCount() {
+  restoreFile();
   let kept = null;
   try {
     kept = JSON.parse(sessionStorage.getItem(KEPT_COUNT));
@@ -694,7 +699,7 @@ document.addEventListener("keydown", (e) => {
 // short as ways are added (it replaced a roll-open "More" box, 2026-10-13, which hid the
 // options and mixed three styles of control). The choice is remembered; switching only
 // cancels a shape or point in progress and keeps the last count on the map.
-const MODES = ["shape", "radius", "country"];
+const MODES = ["shape", "radius", "country", "file"];
 function setMode(mode, { focus = false, remember = true } = {}) {
   if (!MODES.includes(mode) || $(`tab-${mode}`).hidden) mode = "shape";
   for (const m of MODES) {
@@ -704,6 +709,7 @@ function setMode(mode, { focus = false, remember = true } = {}) {
     tab.tabIndex = on ? 0 : -1;
     $(`mode-${m}`).hidden = !on;
   }
+  showFileLayers(mode === "file");
   if (focus) $(`tab-${mode}`).focus();
   setPicking(false);
   if (sketch) endSketch();
@@ -896,6 +902,7 @@ function setUnits(u, { fromUser = false } = {}) {
   $("density-unit").textContent = t("unit.per", { area: U().area });
   $("legend-title").textContent = t("legend.title", { area: U().area });
   showRadius();
+  showFileRadius();
   scale?.setUnit(u);
   // A circle on the map is counted again at its new radius; any other count is just
   // shown in the new units.
@@ -916,6 +923,7 @@ function clearAll() {
   lastCountry = null;
   lastLabel = null;
   lastResult = null;
+  selectRow(null);
   $("country-pick").value = "";
   map.getSource(HEAT_SOURCE)?.setData(EMPTY);
   $("result").hidden = true;
@@ -1240,7 +1248,8 @@ function byContinent(countries) {
 function errText(err) {
   if (!err?.key) return err?.message ?? String(err);
   const vars = { ...err.vars };
-  if (vars.country) vars.country = countryName(vars.country, vars.country);
+  // By its code in other languages; in English by the name the catalog gives.
+  if (vars.country) vars.country = countryName(vars.country, vars.name ?? vars.country);
   return t(err.key, vars);
 }
 
@@ -1251,6 +1260,7 @@ let lastGeometry = null;
 let lastCountry = null; // ISO3 when the result is a whole country from the picker
 let lastLabel = null; // () => status text saying what was counted (around a point)
 let lastResult = null;
+let fileSet = null; // the file open in the File tab, with its rows (F-02)
 
 // Detail is a step relative to the resolution static.js picks for the area: Fine is always
 // one H3 level finer than Normal (~7x the cells). It used to be two different cell budgets,
@@ -1276,6 +1286,8 @@ function setDetail(level) {
   }
   if (lastCountry) queryCountry(lastCountry);
   else if (lastGeometry) queryPopulation(lastGeometry, lastLabel, { fresh: false });
+  // A file's list counts at the same detail, so its numbers and the map always agree.
+  if (fileSet) countFile();
 }
 setDetail(detail);
 for (const b of document.querySelectorAll(".seg[data-detail]")) {
@@ -1316,7 +1328,9 @@ function assertCompatible(res) {
 
 // `label` names what was counted, for the status line (around a point says where).
 // `fresh` is a new area rather than the same one at another detail level.
-function queryPopulation(geometry, label = null, { fresh = true } = {}) {
+function queryPopulation(geometry, label = null, { fresh = true, row = null } = {}) {
+  // A new count is no longer that row of the file; the same one at another detail still is.
+  if (fresh) selectRow(row);
   lastGeometry = geometry;
   lastLabel = label;
   lastCountry = null;
@@ -1332,6 +1346,7 @@ function queryPopulation(geometry, label = null, { fresh = true } = {}) {
 
 // `frame` moves the map onto the country: on picking it, not on a detail change.
 function queryCountry(iso3, { frame = false, fresh = frame } = {}) {
+  if (fresh) selectRow(null);
   lastCountry = iso3;
   lastGeometry = null;
   lastLabel = null;
@@ -1373,10 +1388,12 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
 }
 
 // Older static.js (a cached shell) reports names only; it is never paired with this file.
-const showDownload = ({ received, total, names, iso3s }) => {
+const downloadText = ({ received, total, names, iso3s }) => {
   const shown = iso3s ? iso3s.map((c, i) => countryName(c, names[i])) : names;
-  if (total)
-    setStatus(t("status.downloading", { names: listNames(shown), got: fmtMB(received), total: fmtMB(total) }));
+  return t("status.downloading", { names: listNames(shown), got: fmtMB(received), total: fmtMB(total) });
+};
+const showDownload = (progress) => {
+  if (progress.total) setStatus(downloadText(progress));
 };
 
 async function staticQuery(geometry) {
@@ -1772,9 +1789,13 @@ const countTitle = (res) =>
 
 // What was counted, in the same words as the panel and the image. The keys and `kind`
 // stay English whatever the language: other tools read them.
-function exportSummary(res) {
-  const kind = res.country ? "country" : lastLabel ? "circle" : "shape";
-  const name = res.country ? countryName(res.country.iso3, res.country.name) : countTitle(res);
+function exportSummary(res, row = selectedRow()) {
+  const kind = res.country ? "country" : row ? row.kind : lastLabel ? "circle" : "shape";
+  const name = res.country
+    ? countryName(res.country.iso3, res.country.name)
+    : row
+      ? rowName(row)
+      : countTitle(res);
   const year = res.country ? String(res.country.data_version ?? "").slice(0, 4) : "";
   return {
     name,
@@ -1848,6 +1869,476 @@ function exportGeojson() {
 $("export").addEventListener("click", exportImage);
 $("export-csv").addEventListener("click", exportCsv);
 $("export-geojson").addEventListener("click", exportGeojson);
+
+// ---- a file of shapes and points (F-02) -------------------------------------------
+// Each row is counted just as if it had been drawn, at its own level, so a row's number
+// and the same shape drawn by hand are the same. Adjoining zones still sum to about the
+// whole: 649 zones around Douala and Yaounde came to within 0.22% of a count at the finest
+// level, where one shared level would have put a typical zone's own number 1.4 to 8.6% off.
+// A list keeps only each row's numbers: a row's hexagons are counted again when it is
+// picked, so 500 rows hold no more memory than one.
+const FILE_SOURCE = "file-shapes";
+const FILE_LAYERS = ["file-fill", "file-line", "file-selected", "file-dot"];
+const KEPT_FILE = "tally-kept-file";
+let fileRun = 0; // the count under way; a newer one, or Stop, makes an older one give up
+
+const rowName = (row) => row.name ?? t(row.fallback[0], row.fallback[1]);
+const selectedRow = () => (fileSet?.selected != null ? fileSet.rows[fileSet.selected] : null);
+// A point with no radius of its own takes the one box in the tab.
+const rowGeometry = (row) =>
+  row.geometry ?? (row.center ? circle(row.center, row.radiusKm ?? fileSet.radiusKm) : null);
+
+function addFileLayers() {
+  map.addSource(FILE_SOURCE, { type: "geojson", data: EMPTY, tolerance: 0 });
+  const area = ["==", ["geometry-type"], "Polygon"];
+  map.addLayer({ id: "file-fill", type: "fill", source: FILE_SOURCE, filter: area,
+    paint: { "fill-color": "#1f6feb", "fill-opacity": 0.05 } });
+  map.addLayer({ id: "file-line", type: "line", source: FILE_SOURCE, filter: area,
+    paint: { "line-color": "#1f6feb", "line-width": 1, "line-opacity": 0.65 } });
+  map.addLayer({ id: "file-selected", type: "line", source: FILE_SOURCE,
+    filter: ["==", ["get", "i"], -1],
+    paint: { "line-color": "#1f6feb", "line-width": 3 } });
+  map.addLayer({ id: "file-dot", type: "circle", source: FILE_SOURCE,
+    filter: ["==", ["geometry-type"], "Point"],
+    paint: { "circle-radius": 3, "circle-color": "#1f6feb",
+             "circle-stroke-color": "#ffffff", "circle-stroke-width": 1 } });
+}
+
+function showFileLayers(on) {
+  for (const id of FILE_LAYERS)
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+}
+
+function drawFileShapes() {
+  const features = [];
+  fileSet?.rows.forEach((row, i) => {
+    const geometry = rowGeometry(row);
+    if (!geometry) return;
+    // Area, so a click where shapes overlap takes the smallest.
+    const properties = { i, area: polygonAreaKm2(geometry) };
+    features.push({ type: "Feature", properties, geometry });
+    if (row.center)
+      features.push({ type: "Feature", properties, geometry: { type: "Point", coordinates: row.center } });
+  });
+  map.getSource(FILE_SOURCE)?.setData({ type: "FeatureCollection", features });
+}
+
+// The view that holds every row. Rows on both sides of the 180° line come together across
+// it, as cellsBounds does for hexagons, rather than stretching round the world.
+function fileBounds() {
+  const boxes = fileSet.rows.map(rowGeometry).filter(Boolean).map(bboxOf);
+  if (!boxes.length) return null;
+  const west = Math.min(...boxes.map((b) => b[0][0]));
+  const east = Math.max(...boxes.map((b) => b[1][0]));
+  const wrap = east - west > 180;
+  const across = (b) => (wrap && b[1][0] < 0 ? [b[0][0] + 360, b[1][0] + 360] : [b[0][0], b[1][0]]);
+  return [
+    [Math.min(...boxes.map((b) => across(b)[0])), Math.min(...boxes.map((b) => b[0][1]))],
+    [Math.max(...boxes.map((b) => across(b)[1])), Math.max(...boxes.map((b) => b[1][1]))],
+  ];
+}
+
+const rowElement = (i) => $("file-rows").children[i];
+
+function rowValue(row) {
+  if (row.problem) return { text: t("file.notCounted"), note: errText(row.problem) };
+  // Only what static.js says in words: anything else is not a sentence for a person.
+  if (row.failure)
+    return { text: t("file.notCounted"), note: row.failure.key ? errText(row.failure) : t("file.problemFailed") };
+  const r = row.result;
+  if (!r) return { text: "–", note: "" };
+  if (r.missing.length) {
+    const left = r.missing_iso3.map((c, i) => countryName(c, r.missing[i]));
+    return {
+      // Nothing downloaded is no count at all, not "at least 0".
+      text: r.total ? t("file.atLeast", { n: fmtInt(r.total) }) : t("file.notCounted"),
+      note: t("file.leftOut", { names: listNames(left) }),
+    };
+  }
+  if (!r.covered) return { text: t("file.noData"), note: "" };
+  if (!r.total) return { text: t("file.nobody"), note: "" };
+  return { text: fmtInt(r.total), note: "" };
+}
+
+function showRow(i) {
+  const row = fileSet.rows[i];
+  const value = rowValue(row);
+  const el = rowElement(i);
+  el.querySelector(".file-value").textContent = value.text;
+  el.querySelector(".file-note").textContent = value.note;
+  el.querySelector(".file-note").hidden = !value.note;
+  el.classList.toggle("muted", !row.result || !row.result.total || Boolean(row.failure));
+}
+
+function fillFileRows() {
+  const list = $("file-rows");
+  list.replaceChildren(
+    ...fileSet.rows.map((row, i) => {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "file-row";
+      button.disabled = !rowGeometry(row);
+      const name = document.createElement("span");
+      name.className = "file-name";
+      name.textContent = rowName(row);
+      name.title = rowName(row);
+      const value = document.createElement("span");
+      value.className = "file-value";
+      const note = document.createElement("span");
+      note.className = "file-note";
+      button.append(name, value, note);
+      button.addEventListener("click", () => pickRow(i));
+      li.append(button);
+      return li;
+    }),
+  );
+  fileSet.rows.forEach((_, i) => showRow(i));
+}
+
+// The panel's account of the list: how far it has got, and the sum once there is one.
+function showFileSum() {
+  const rows = fileSet.rows;
+  const counted = rows.filter((r) => r.result && !r.failure);
+  const total = counted.reduce((sum, r) => sum + r.result.total, 0);
+  const partial = counted.some((r) => r.result.missing.length);
+  const running = fileSet.running;
+  const left = rows.filter((r) => !r.problem && !r.failure && !r.result).length;
+  $("file-sum-row").hidden = counted.length < 2;
+  $("file-sum-label").textContent = t("file.sum", { n: counted.length });
+  $("file-sum").textContent = partial ? t("file.atLeast", { n: fmtInt(total) }) : fmtInt(total);
+  $("file-overlap").hidden = counted.length < 2;
+  const skipped = rows.filter((r) => r.problem || r.failure).length;
+  $("file-skipped").textContent = skipped ? t("file.skipped", { n: skipped }) : "";
+  $("file-skipped").hidden = !skipped;
+  $("file-stop").hidden = !running;
+  $("file-rest").hidden = running || !left;
+  $("file-save").hidden = running || !rows.length;
+  if (running) return;
+  $("file-progress").textContent = left ? t("file.stopped", { done: rows.length - left, n: rows.length }) : "";
+}
+
+const yieldToPage = () =>
+  new Promise((resolve) => {
+    // A hidden tab's timers slow to one a minute, which would stall a long list for hours.
+    if (!document.hidden) return setTimeout(resolve, 0);
+    const { port1, port2 } = new MessageChannel();
+    port1.onmessage = () => resolve();
+    port2.postMessage(0);
+  });
+
+// Counts every row that has no answer yet at this detail, one at a time: each downloads only
+// the packs it touches, and the packs stay on this device for the rows after it.
+async function countFile() {
+  const run = ++fileRun;
+  const set = fileSet;
+  const step = DETAIL_STEP[detail];
+  for (const row of set.rows) {
+    if (row.result?.step !== step) row.result = null;
+    if (!row.result) row.failure = null;
+  }
+  set.running = true;
+  set.rows.forEach((_, i) => showRow(i));
+  showFileSum();
+  const todo = set.rows.filter((r) => !r.problem && !r.result).length;
+  let done = 0;
+  let paused = performance.now();
+  try {
+    for (let i = 0; i < set.rows.length; i++) {
+      const row = set.rows[i];
+      if (row.problem || row.result) continue;
+      const counting = t("file.counting", { done: done + 1, n: todo });
+      $("file-progress").textContent = counting;
+      if (performance.now() - paused > 30) {
+        await yieldToPage();
+        paused = performance.now();
+      }
+      if (run !== fileRun) return;
+      try {
+        const geometry = rowGeometry(row);
+        const res = await TallyStatic.query(geometry, step, (progress) => {
+          if (progress.total && run === fileRun)
+            $("file-progress").textContent = `${counting} ${downloadText(progress)}`;
+        });
+        if (run !== fileRun) return;
+        assertCompatible(res);
+        const areaKm2 = polygonAreaKm2(geometry);
+        row.result = {
+          step,
+          total: res.total,
+          areaKm2,
+          density: areaKm2 > 0 ? res.total / areaKm2 : 0,
+          source: res.source,
+          resolution: res.resolution,
+          populated_cells: res.populated_cells,
+          missing: res.missing ?? [],
+          missing_iso3: res.missing_iso3 ?? [],
+          covered: res.covered,
+        };
+      } catch (err) {
+        if (run !== fileRun) return;
+        if (err.name === "StaleAppError" || err.name === "DataUpdatedError") throw err;
+        row.failure = err;
+      }
+      done++;
+      showRow(i);
+      showFileSum();
+    }
+  } catch (err) {
+    if (run !== fileRun) return;
+    showUpdate(errText(err));
+  }
+  if (run !== fileRun) return;
+  set.running = false;
+  showFileSum();
+}
+
+function selectRow(i) {
+  if (!fileSet) return;
+  const before = fileSet.selected;
+  if (before != null) rowElement(before)?.querySelector("button")?.removeAttribute("aria-current");
+  fileSet.selected = i;
+  if (map.getLayer("file-selected")) map.setFilter("file-selected", ["==", ["get", "i"], i ?? -1]);
+  if (i != null) {
+    const button = rowElement(i)?.querySelector("button");
+    button?.setAttribute("aria-current", "true");
+    button?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function pickRow(i) {
+  const row = fileSet.rows[i];
+  const geometry = rowGeometry(row);
+  if (!geometry) return;
+  clearShape();
+  clearCircle();
+  queryPopulation(geometry, () => t("where.file", { name: rowName(row) }), { row: i });
+}
+
+// A click on a shape picks its row, unless the click belongs to drawing or to placing a point.
+map.on("click", (e) => {
+  if (!fileSet || sketch || pickingPoint || draw?.getMode() === "polygon") return;
+  if (!map.getLayer("file-fill") || map.getLayoutProperty("file-fill", "visibility") === "none") return;
+  const hits = map.queryRenderedFeatures(e.point, { layers: ["file-fill", "file-dot"] });
+  if (!hits.length) return;
+  const smallest = hits.reduce((a, b) => (b.properties.area < a.properties.area ? b : a));
+  if (smallest.properties.i !== fileSet.selected) pickRow(smallest.properties.i);
+});
+
+function showFileRadius() {
+  const box = $("file-radius-row");
+  const needed = Boolean(fileSet?.rows.some((r) => r.center && r.radiusKm == null));
+  box.hidden = !needed;
+  if (!needed) return;
+  $("file-radius").value = String(Math.round((fileSet.radiusKm / U().km) * 100) / 100);
+  $("file-radius-unit").textContent = U().dist;
+}
+
+$("file-radius").addEventListener("change", () => {
+  const v = parseFloat($("file-radius").value);
+  if (v > 0) {
+    fileSet.radiusKm = Math.min(RADIUS_KM_MAX, Math.max(RADIUS_KM_MIN, v * U().km));
+    for (const row of fileSet.rows)
+      if (row.center && row.radiusKm == null) {
+        row.result = null;
+        row.failure = null;
+      }
+    drawFileShapes();
+    if (selectedRow()?.center && selectedRow().radiusKm == null) pickRow(fileSet.selected);
+    countFile();
+  }
+  showFileRadius();
+});
+
+function showFile({ frame = true } = {}) {
+  $("file-start").hidden = true;
+  $("file-list").hidden = false;
+  $("file-name").textContent = fileSet.name;
+  $("file-name").title = fileSet.name;
+  $("file-size").textContent = t("file.rows", { n: fileSet.rows.length });
+  fillFileRows();
+  showFileRadius();
+  drawFileShapes();
+  if (frame) {
+    const bounds = fileBounds();
+    if (bounds) map.fitBounds(bounds, { padding: panelPadding(), maxZoom: 14 });
+  }
+  return countFile();
+}
+
+function closeFile() {
+  fileRun++;
+  const wasRow = selectedRow();
+  selectRow(null);
+  fileSet = null;
+  map.getSource(FILE_SOURCE)?.setData(EMPTY);
+  $("file-list").hidden = true;
+  $("file-start").hidden = false;
+  $("file-rows").replaceChildren();
+  $("file-progress").textContent = "";
+  if (wasRow) clearAll();
+}
+
+async function openFiles(files) {
+  if (!files.length) return;
+  setMode("file");
+  setStatus(t("file.reading"));
+  try {
+    const { name, rows } = await TallyFiles.read(files);
+    closeFile();
+    fileSet = { name, rows, radiusKm, selected: null, running: false };
+    setStatus("");
+    showFile();
+  } catch (err) {
+    console.warn("file:", err);
+    setStatus(err.key ? errText(err) : t("file.errRead", { name: files[0].name }), true);
+  }
+}
+
+$("file-open").addEventListener("click", () => $("file-input").click());
+$("file-input").addEventListener("change", (e) => {
+  openFiles([...e.target.files]);
+  e.target.value = ""; // so that the same file, changed and saved, can be opened again
+});
+$("file-close").addEventListener("click", closeFile);
+$("file-stop").addEventListener("click", () => {
+  fileRun++;
+  fileSet.running = false;
+  showFileSum();
+});
+$("file-rest").addEventListener("click", countFile);
+
+// Anywhere on the page takes a file dropped on it.
+let dragDepth = 0;
+const carriesFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+window.addEventListener("dragenter", (e) => {
+  if (!carriesFiles(e)) return;
+  e.preventDefault();
+  dragDepth++;
+  $("file-drop").hidden = false;
+});
+window.addEventListener("dragover", (e) => {
+  if (carriesFiles(e)) e.preventDefault();
+});
+window.addEventListener("dragleave", (e) => {
+  if (!carriesFiles(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) $("file-drop").hidden = true;
+});
+window.addEventListener("drop", (e) => {
+  if (!carriesFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  $("file-drop").hidden = true;
+  openFiles([...e.dataTransfer.files]);
+});
+
+// Saved beside what the file already said about each row. A file's own column of the same
+// name as one of Tally's keeps its values as file_<name>.
+function fileColumns(row) {
+  const res = row.result;
+  const counted = res
+    ? exportSummary(
+        { total: res.total, areaKm2: res.areaKm2, density: res.density, missing: res.missing,
+          source: res.source, resolution: res.resolution, populated_cells: res.populated_cells },
+        row,
+      )
+    : { name: rowName(row), kind: row.kind };
+  const value = rowValue(row);
+  const note = value.note || (res && !res.covered ? t("file.noData") : "");
+  const summary = { ...counted, note };
+  if (res && !res.covered) summary.population_estimate = "";
+  if (row.center) {
+    summary.latitude = row.center[1];
+    summary.longitude = row.center[0];
+    summary.radius_km = round(row.radiusKm ?? fileSet.radiusKm, 3);
+  }
+  return summary;
+}
+
+const ownColumns = (row, taken) =>
+  Object.fromEntries(
+    Object.entries(row.props ?? {})
+      .filter(([, v]) => v === null || typeof v !== "object")
+      .map(([k, v]) => [taken.has(k) ? `file_${k}` : k, v]),
+  );
+
+// A file's words go into a spreadsheet that may run them: =, +, - or @ opens a formula, so
+// a file passed along could carry one. A leading ' makes it text; numbers stay numbers.
+const safeCell = (v) =>
+  typeof v === "string" && /^[=+\-@\t\r]/.test(v) && !Number.isFinite(Number(v)) ? `'${v}` : v;
+
+function exportFileCsv() {
+  const ours = Object.keys(fileColumnKeys());
+  const rows = fileSet.rows.map((row) => ({ summary: fileColumns(row), own: ownColumns(row, new Set(ours)) }));
+  const keys = [...new Set([...ours, ...rows.flatMap((r) => Object.keys(r.own))])];
+  const lines = [keys, ...rows.map((r) => keys.map((k) => safeCell((k in r.summary ? r.summary : r.own)[k])))];
+  const text = lines.map((line) => line.map(csvField).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + text + "\r\n"], { type: "text/csv;charset=utf-8" });
+  setStatus(t("status.saved", { file: saveFile(blob, "csv") }));
+}
+
+// Every column a row of the list can have, in the order a single count's file has them.
+function fileColumnKeys() {
+  const sample = exportSummary(
+    { total: 0, areaKm2: 0, density: 0, missing: [], source: "", resolution: 0, populated_cells: 0 },
+    fileSet.rows[0],
+  );
+  return { ...sample, note: "", latitude: "", longitude: "", radius_km: "" };
+}
+
+// The file's shapes with what was counted in each: no hexagons, which would run to hundreds
+// of MB across a list; picking a row saves its own (Save, under its count).
+function exportFileGeojson() {
+  const taken = new Set(Object.keys(fileColumnKeys()));
+  taken.add("population");
+  const features = fileSet.rows.map((row) => {
+    const { population_estimate: population = null, ...summary } = fileColumns(row);
+    const geometry = rowGeometry(row);
+    return {
+      type: "Feature",
+      properties: { ...ownColumns(row, taken), name: summary.name, kind: summary.kind,
+                    population: population === "" ? null : population, ...summary },
+      geometry: geometry && { type: geometry.type, coordinates: roundCoords(geometry.coordinates) },
+    };
+  });
+  const blob = new Blob([JSON.stringify({ type: "FeatureCollection", features })], {
+    type: "application/geo+json",
+  });
+  setStatus(t("status.saved", { file: saveFile(blob, "geojson") }));
+}
+$("file-csv").addEventListener("click", exportFileCsv);
+$("file-geojson").addEventListener("click", exportFileGeojson);
+
+// Reload and a change of language keep the list, as they keep a count. Its answers are not
+// kept: the packs are on this device, so counting again is quick and always current. A file
+// too large for the session's storage comes back as a line asking to open it again.
+function keepFile() {
+  if (!fileSet) return;
+  const rows = fileSet.rows.map(({ result, failure, ...row }) => row);
+  const kept = { name: fileSet.name, rows, radiusKm: fileSet.radiusKm, selected: fileSet.selected };
+  try {
+    sessionStorage.setItem(KEPT_FILE, JSON.stringify(kept));
+  } catch (_) {
+    try {
+      sessionStorage.setItem(KEPT_FILE, JSON.stringify({ name: fileSet.name }));
+    } catch (_) {}
+  }
+}
+
+function restoreFile() {
+  let kept = null;
+  try {
+    kept = JSON.parse(sessionStorage.getItem(KEPT_FILE));
+    sessionStorage.removeItem(KEPT_FILE);
+  } catch (_) {}
+  if (!kept) return;
+  setMode("file");
+  if (!kept.rows) return setStatus(t("file.openAgain", { name: kept.name }));
+  fileSet = { name: kept.name, rows: kept.rows, radiusKm: kept.radiusKm, selected: null, running: false };
+  showFile({ frame: kept.selected == null });
+  if (kept.selected != null) pickRow(kept.selected);
+}
 
 // ---- language (F-01) ------------------------------------------------------------
 // The ? sheet lists every language in its own words. Picking one reloads the page in it,

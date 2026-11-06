@@ -5,7 +5,7 @@ Draw a shape on a map and see how many people live inside it, with a density hea
 **Try it: https://tallymaps.org**
 
 - **Shape:** draw any polygon. **Radius:** everyone within a distance of a point.
-  **Country:** a whole country at once.
+  **Country:** a whole country at once. **File:** every shape or point in a file you open.
 - 233 countries and territories, from 30 m population estimates (100 m for the 38 that
   Meta's maps leave out, among them China, Russia, Pakistan, Canada and Iran).
 - Runs entirely in your browser. Country data downloads on first use and stays available
@@ -129,6 +129,11 @@ None of these are tracked by git.
   each corner, then **Finish**.
 - **Radius:** set the distance, press **Pick a point** and click the map.
 - **Country:** pick a country for its whole population, area and density.
+- **File:** press **Open a file**, or drop one anywhere on the page: GeoJSON, KML, KMZ, a zipped
+  Shapefile, or a CSV with `latitude` and `longitude` columns (and `name` and `radius_km` if
+  you have them). Up to 500 rows. Every row is counted and listed; click one for its heatmap,
+  and **Save all** for a CSV or GeoJSON of the list with your file's own columns. The file
+  stays on your device.
 - **Normal / Fine:** Normal answers with a few thousand hexagons; Fine uses hexagons one
   level smaller, which follow the shape's edge more closely.
 - Point at (or tap) a hexagon for its own estimate. The hexagon **?** button opens About
@@ -160,6 +165,7 @@ make verify COUNTRIES="CMR"     # the country's total from its outline, reconcil
 make browser-setup              # once: the headless Chromium the browser checks use
 make site && make parity        # the browser's answers equal the Python resolver's
 make countries-check            # every country in dist/, and the page's memory use
+make files-check                # real files through the File tab, each row checked
 make update-check               # a tab left open survives a release (new version, new data)
 make overlaps                   # people counted in two countries where outlines overlap
 ```
@@ -178,7 +184,7 @@ How the checks work, and the results so far: [docs/VERIFICATION.md](docs/VERIFIC
 | --- | --- |
 | `ingest/` | Download from HDX, clip, bin to H3, roll up; the Python reference resolver |
 | `scripts/` | Packs, the static build, verification, the coverage map |
-| `web/` | The app: MapLibre, Terra Draw, h3-js. No build step |
+| `web/` | The app: MapLibre, Terra Draw, h3-js, togeojson, shpjs. No build step |
 | `reference/` | Small checked-in data: city locations, continents, how overlapping outlines are split |
 | `tests/` | `pytest` suite |
 | `docs/` | Architecture, verification, data sources, roadmap |

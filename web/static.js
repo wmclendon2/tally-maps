@@ -129,7 +129,7 @@ const TallyStatic = (() => {
     const want = isGzip(buf) ? part.sha256 : part.raw_sha256;
     const got = await sha256Hex(buf);
     if (got && got !== want)
-      throw said(new Error(`${part.name} data failed its checksum`), "err.checksum", { country: part.iso3 });
+      throw said(new Error(`${part.name} data failed its checksum`), "err.checksum", { country: part.iso3, name: part.name });
   }
 
   // Layout: scripts/build_packs.py. The one section wanted is copied out of the unpacked
@@ -199,21 +199,30 @@ const TallyStatic = (() => {
   // Stream the file so the caller can show progress; `no-store` keeps a second copy out
   // of the HTTP cache, since IndexedDB already holds one.
   async function download(part, onBytes) {
-    const r = await fetch(new URL(part.url, catalogBase), { cache: "no-store" });
+    const failed = () =>
+      said(
+        new Error(`Could not download ${part.name} data. Check the connection and try again.`),
+        "err.download",
+        { country: part.iso3, name: part.name },
+      );
+    // With no connection fetch rejects with the browser's own words ("Failed to fetch").
+    const r = await fetch(new URL(part.url, catalogBase), { cache: "no-store" }).catch((err) => {
+      console.warn(`${part.url}:`, err);
+      throw failed();
+    });
     if (r.status === 404 || r.status === 410) throw new PackGoneError(part);
     if (!r.ok) {
       console.warn(`${part.url}: HTTP ${r.status}`);
-      throw said(
-        new Error(`Could not download ${part.name} data. Check the connection and try again.`),
-        "err.download",
-        { country: part.iso3 },
-      );
+      throw failed();
     }
     const chunks = [];
     let got = 0;
     const reader = r.body.getReader();
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await reader.read().catch((err) => {
+        console.warn(`${part.url}:`, err);
+        throw failed();
+      });
       if (done) break;
       chunks.push(value);
       got += value.length;
@@ -433,7 +442,7 @@ const TallyStatic = (() => {
         throw new DataUpdatedError(
           `Could not download ${err.part.name} data. Reload to try again.`,
           "err.downloadReload",
-          { country: err.part.iso3 },
+          { country: err.part.iso3, name: err.part.name },
         );
       try {
         return await ask();

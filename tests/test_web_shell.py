@@ -22,7 +22,7 @@ def sw_version() -> str:
     return m.group(1)
 
 
-VERSIONED_ASSETS = ("app.js", "static.js", "style.css", "i18n.js")
+VERSIONED_ASSETS = ("app.js", "static.js", "files.js", "style.css", "i18n.js")
 
 
 def index_versions() -> dict[str, str]:

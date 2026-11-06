@@ -50,6 +50,9 @@ PACKAGES: dict[str, tuple[str, list[str], str]] = {
         ["dist/terra-draw-maplibre-gl-adapter.umd.js"],
         TERRA_DRAW_LICENSE,
     ),
+    # Read files in the File tab (F-02); files.js loads them when a file is opened.
+    "@tmcw/togeojson": ("7.1.3", ["dist/togeojson.umd.js"], "LICENSE"),
+    "shpjs": ("6.2.0", ["dist/shp.min.js"], "LICENSE.md"),
     # The panel's typefaces (SIL OFL 1.1), Latin subset only; style.css declares them.
     "@fontsource/barlow": (
         "5.3.0",

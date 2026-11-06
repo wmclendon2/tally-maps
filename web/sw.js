@@ -6,17 +6,18 @@
  * (*.tlyp.gz) are not cached here either: static.js keeps them in IndexedDB, which this
  * file's activate step (it deletes every cache but the current shell) cannot wipe. */
 
-// Bump SHELL_VERSION on any change to static.js, app.js, style.css, i18n.js, i18n/*.json
+// Bump SHELL_VERSION on any change to static.js, files.js, app.js, style.css, i18n.js, i18n/*.json
 // or this file, and change the ?v= in index.html to match -- tests/test_web_shell.py fails
 // if the two drift apart. The query string is what stops a freshly fetched index.html from pairing with a stale cached
 // app.js: a mismatched pair once shipped black hexagons and a dead detail toggle with no
 // error at all, because the old script read a field the new answers no longer carried.
-const SHELL_VERSION = "60";
+const SHELL_VERSION = "61";
 const CACHE = `tally-shell-v${SHELL_VERSION}`;
 const SHELL = [
   "./",
   "./index.html",
   `./static.js?v=${SHELL_VERSION}`,
+  `./files.js?v=${SHELL_VERSION}`,
   `./app.js?v=${SHELL_VERSION}`,
   `./style.css?v=${SHELL_VERSION}`,
   // The interface's languages (F-01): every one, so a change of language works offline.
@@ -33,6 +34,9 @@ const SHELL = [
   "./vendor/h3-js@4.5.0/h3-js.umd.js",
   "./vendor/terra-draw@1.34.0/terra-draw.umd.js",
   "./vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js",
+  // Loaded only when a file is opened (files.js), and here so that works offline too.
+  "./vendor/@tmcw/togeojson@7.1.3/togeojson.umd.js",
+  "./vendor/shpjs@6.2.0/shp.min.js",
   // style.css's typefaces; without them offline the panel falls back to the system font.
   "./vendor/@fontsource/barlow@5.3.0/barlow-latin-400-normal.woff2",
   "./vendor/@fontsource/barlow@5.3.0/barlow-latin-500-normal.woff2",

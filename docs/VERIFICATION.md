@@ -10,6 +10,7 @@ the built packs in `data/packs/` (or a built `dist/`), and the overlap audit the
 | City positions | `verify_cities.py` | Shifted, flipped or misregistered rasters |
 | Browser parity | `browser_parity.py` | `static.js` drifting from `ingest/resolve.py` |
 | Country picker and memory | `browser_countries.py` | Wrong country totals in the browser, memory growth |
+| Files | `browser_files.py` | A format misread, a row dropped or wrong, a saved file disagreeing with the list |
 | Outline overlaps | `audit_overlaps.py` | People counted in two countries where their outlines overlap |
 
 ## Country totals
@@ -164,6 +165,25 @@ Normal and Fine. `browser_parity.py` serves a built `dist/`, runs
 each shape through `TallyStatic.query` in headless Chrome from empty storage, and compares
 the resolution, cell counts and totals. A small build runs only the cases its countries
 cover.
+
+## Files
+
+```bash
+uv run --group browser python scripts/browser_files.py [--dist DIR]
+```
+
+Writes a file of each format the File tab opens, opens each through the page's own file
+input, and checks every row against `ingest/resolve.py` over the packs: holes,
+multipolygons, a shape across 180° with its corners jumping from +179 to -179, a Shapefile in
+meters read through its `.prj`, and a CSV as French Excel saves it. It also checks what a
+person would notice: rows that cannot be counted say why, a picked row equals its line, Normal
+and Fine recount the list, Stop stops, a reload keeps the list, the saved CSV and GeoJSON
+hold what the list showed, and Tally reads its own files back. Offline, the parsers load from
+the service worker and a row with no pack says what is missing. Needs CMR and FJI in the
+build. **Baseline (2026-11-05, 5 countries):** 500 adjoining shapes in Cameroon counted in
+9.1 s with the page holding 19 MB, summing to 23,343,979, exactly the whole box at their level
+(res 8). The same box counted whole, at res 5, reads 23,882,989, 2.3% higher: res 8 and res 9
+agree to 0.011%, so the list is the better number.
 
 ## Country picker and memory
 
