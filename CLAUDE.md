@@ -60,9 +60,12 @@ Read it before changing the pipeline, the pack format or the resolver.
 - Tally reads its own saved files back (F-41, `savedRow` in files.js, on `counted_with`): a circle
   by `latitude`/`longitude`/`radius_km`, while its outline still fits them (else the outline wins);
   `drawn` means Tally named the row, and `auto_named` that a file gave it no name and Tally numbered it,
-  so either is named afresh in today's language; `country_code` picks a whole country
-  or continent again. Its columns are not carried as the file's own. A new saved column goes in
-  `OWN_COLUMNS`. Files saved before these columns still open (`OLD_SHAPE_TITLES`).
+  so either is named afresh in today's language, unless a person has typed over the name
+  (`NUMBERED_LABELS`, `DRAWN_LABELS`; a spreadsheet's TRUE or VRAI still counts as the marker);
+  `country_code` picks a whole country or continent again. Its columns are not carried as the
+  file's own, and a file's column of the same name is saved as `file_<name>`. Every row saved
+  carries `counted_with`, counted or not. A new saved column goes in `OWN_COLUMNS`. Files saved
+  before these columns still open (`OLD_SHAPE_TITLES`).
 - Keep the `population-outline` layer and the drawn shape in any heatmap change, and
   `tolerance: 0` on the `population-cells` source (otherwise sub-pixel hexes vanish when
   zoomed out).
@@ -88,7 +91,11 @@ Read it before changing the pipeline, the pack format or the resolver.
 - Map controls at the bottom stack newest-on-top: add the attribution before the scale.
   On phones the bottom sheet is lifted by `--credits-h` so it never hides the credits.
 - The service worker never caches packs (`*.tlyp.gz`, kept in IndexedDB `tally-packs`) or
-  tiles; its activate step deletes every cache but the shell's (`tally-shell-vN`).
+  tiles; its activate step deletes every cache but the shell's (`tally-shell-vN`). Its install
+  also stores the manifest, catalog and no-data mask, so one visit is enough to start offline.
+- The app hangs off the map's `load`, so it must never depend on the basemap's host:
+  `startWithoutBasemap` swaps in `BLANK_STYLE` if the style fails or hangs, and nothing added to
+  the map may need the basemap's glyphs or sprites. `browser_files.py` starts it with the host blocked.
 - No analytics, hosting config or deploy scripts in this repo: `web/` and `build_static.py`
   never add a beacon. The browser checks still block common analytics beacons, so a check
   against a hosted copy never counts as a visit.

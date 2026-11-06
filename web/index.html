@@ -33,12 +33,13 @@
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="vendor/maplibre-gl@5.24.0/maplibre-gl.css">
-  <link rel="stylesheet" href="style.css?v=72">
+  <link rel="stylesheet" href="style.css?v=73">
   <!-- The interface's languages (F-01): first, so the strings load while the map does. -->
-  <script src="i18n.js?v=72"></script>
+  <script src="i18n.js?v=73"></script>
 </head>
 <body>
   <div id="map"></div>
+  <div id="no-basemap" class="map-note" data-i18n="map.noBasemap" hidden>The street map could not load, so the map is blank. Counts still work.</div>
 
   <aside id="panel">
     <button id="sheet-toggle" class="grabber" aria-expanded="true" aria-label="Show less"
@@ -404,8 +405,8 @@
   <script src="vendor/h3-js@4.5.0/h3-js.umd.js"></script>
   <script src="vendor/terra-draw@1.34.0/terra-draw.umd.js"></script>
   <script src="vendor/terra-draw-maplibre-gl-adapter@1.4.1/terra-draw-maplibre-gl-adapter.umd.js"></script>
-  <script src="static.js?v=72"></script>
-  <script src="files.js?v=72"></script>
-  <script src="app.js?v=72"></script>
+  <script src="static.js?v=73"></script>
+  <script src="files.js?v=73"></script>
+  <script src="app.js?v=73"></script>
 </body>
 </html>

@@ -56,6 +56,14 @@ def test_service_worker_precaches_the_versioned_urls():
         )
 
 
+def test_service_worker_precaches_the_data_index_html_names():
+    meta = re.search(r'name="tally-data" content="([^"]+)"', INDEX).group(1)
+    assert f'DATA_MANIFEST = "./{meta}"' in SW, (
+        "sw.js precaches the manifest and catalog from the path index.html reads them at, "
+        "or offline after a first visit has no list of countries"
+    )
+
+
 def test_cache_name_tracks_the_version():
     assert "tally-shell-v${SHELL_VERSION}" in SW, "a new shell must land in a new cache"
 

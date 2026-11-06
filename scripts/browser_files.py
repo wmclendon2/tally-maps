@@ -625,12 +625,356 @@ def small_things(page, where: Path, paths: dict[str, Path], check: Check) -> Non
     console.print("[bold]A zip that unpacks large[/bold]")
     big = where / "big_shp.zip"
     big.write_bytes(
-        zipped({**shapefile([("Yaounde", YAOUNDE[0])]), "zones.sbn": bytes(65_000_000)})
+        zipped({**shapefile([("Yaounde", YAOUNDE[0])]), "extra.json": bytes(65_000_000)})
     )
     check("the zip itself is small", big.stat().st_size < 1_000_000, big.stat().st_size)
     said = refused(page, big)
     check("refused by what it unpacks to, before reading it", "unzips to 66 MB" in said, said)
     check("and the Shapefile reader never ran", page.evaluate("() => !fileSet"), said)
+    beside = where / "beside_a_photo.zip"
+    beside.write_bytes(
+        zipped({**shapefile([("Yaounde", YAOUNDE[0])]), "photo.tif": bytes(70_000_000)})
+    )
+    rows = open_file(page, beside)
+    check("a large file the reader never opens is no reason to refuse", len(rows) == 1, rows)
+
+
+def csv_rows(path: Path) -> list[dict]:
+    return list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
+
+
+def write_csv(path: Path, rows: list[dict]) -> Path:
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+    path.write_text(out.getvalue(), encoding="utf-8")
+    return path
+
+
+def edited_lists(page, where: Path, check: Check) -> None:
+    """A saved list someone has changed, by hand or by opening it in a spreadsheet."""
+    console.print("[bold]A saved list, edited[/bold]")
+    points = where / "edit_points.csv"
+    points.write_text("latitude,longitude,radius_km\n3.9,11.5,2\n4.0,9.7,2\n")
+    open_file(page, points)
+    saved = csv_rows(save(page, "#file-csv", where / "edit_saved.csv"))
+    check("rows with no name are marked", saved[0]["auto_named"] == "true", saved[0])
+
+    typed = [{**saved[0], "name": "Clinic North"}, saved[1]]
+    rows = open_file(page, write_csv(where / "edit_typed.csv", typed))
+    check("a typed name stays (CSV)", rows[0]["name"] == "Clinic North", rows)
+    check("the row beside it is still numbered", rows[1]["name"] == "Point 2", rows)
+    again = csv_rows(save(page, "#file-csv", where / "edit_typed_again.csv"))
+    check("and it is no longer marked", again[0]["auto_named"] == "", again[0])
+
+    shouting = [{**row, "auto_named": word} for row, word in zip(saved, ("TRUE", "VRAI"))]
+    shouting[0]["name"] = "Forme 1"
+    rows = open_file(page, write_csv(where / "edit_excel.csv", shouting))
+    check(
+        "a spreadsheet's TRUE or VRAI is still the marker",
+        [r["name"] for r in rows] == ["Point 1", "Point 2"],
+        rows,
+    )
+
+    shapes = {
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "properties": {},
+             "geometry": {"type": "Polygon", "coordinates": box(11.45, 3.8, 11.6, 3.95)}},
+            {"type": "Feature", "properties": {},
+             "geometry": {"type": "LineString", "coordinates": [[11, 3], [12, 4]]}},
+        ],
+    }  # fmt: skip
+    lines = where / "edit_shapes.geojson"
+    lines.write_text(json.dumps(shapes))
+    open_file(page, lines)
+    first = save(page, "#file-geojson", where / "edit_shapes_saved.geojson")
+    data = json.loads(first.read_text())
+    check(
+        "a row Tally could not count is still marked as Tally's",
+        data["features"][1]["properties"].get("counted_with") == "tallymaps.org",
+        data["features"][1]["properties"],
+    )
+    data["features"][0]["properties"]["name"] = "North zone"
+    first.write_text(json.dumps(data))
+    rows = open_file(page, first)
+    check("a typed name stays (GeoJSON)", rows[0]["name"] == "North zone", rows)
+    check("and a problem row keeps its number", rows[1]["name"] == "Shape 2", rows)
+    second = json.loads(save(page, "#file-geojson", where / "edit_shapes_2.geojson").read_text())
+    columns = {k for f in second["features"] for k in f["properties"]}
+    check(
+        "nothing of Tally's comes back as the file's own",
+        not {k for k in columns if k.startswith("file_")},
+        sorted(columns),
+    )
+    in_csv = save(page, "#file-csv", where / "edit_shapes.csv")
+    open_file(page, in_csv)
+    kinds = [r["kind"] for r in csv_rows(save(page, "#file-csv", where / "edit_shapes_2.csv"))]
+    check("a shape stays a shape across two saves", kinds == ["shape", "shape"], kinds)
+
+    drawn = where / "edit_drawn.geojson"
+    drawn.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "name": name,
+                            "kind": "shape",
+                            "drawn": True,
+                            "counted_with": "tallymaps.org",
+                        },
+                        "geometry": {"type": "Polygon", "coordinates": box(11.45, 3.8, 11.6, 3.95)},
+                    }
+                    for name in ("My own zone", "Forme dessinée 2")
+                ],
+            }
+        )
+    )
+    rows = open_file(page, drawn)
+    check(
+        "a drawn row someone renamed keeps that name; one they did not is said afresh",
+        [r["name"] for r in rows] == ["My own zone", "Drawn shape 2"],
+        rows,
+    )
+
+    console.print("[bold]A file's own columns over two saves[/bold]")
+    own = where / "own_columns.csv"
+    own.write_text(
+        'name,latitude,longitude,radius_km,population,country_code,"=HYPERLINK(""http://x"",""y"")"\n'
+        "-North zone,3.9,11.5,2,1000,CM,1\n"
+        "@HQ,4.0,9.7,2,2000,CM,2\n"
+    )
+    open_file(page, own)
+    one_path = save(page, "#file-csv", where / "own_1.csv")
+    one = csv_rows(one_path)
+    check(
+        "a column named as Tally's moves aside",
+        one[0]["file_population"] == "1000" and one[0]["file_country_code"] == "CM",
+        one[0],
+    )
+    check(
+        "a formula in a heading is text",
+        one_path.read_text(encoding="utf-8-sig").split("\r\n")[0].count("'=HYPERLINK") == 1,
+        list(one[0]),
+    )
+    check("a formula in a name is text", one[0]["name"] == "'-North zone", one[0])
+    rows = open_file(page, one_path)
+    check(
+        "reopened, the apostrophes are gone",
+        [r["name"] for r in rows] == ["-North zone", "@HQ"],
+        rows,
+    )
+    facts = page.evaluate(FACTS_JS)
+    check(
+        "the heading comes back as the file had it",
+        '=HYPERLINK("http://x","y")' in facts[0]["props"],
+        facts[0]["props"],
+    )
+    two_path = save(page, "#file-csv", where / "own_2.csv")
+    two = csv_rows(two_path)
+    check(
+        "and they survive a second save",
+        two[0]["file_population"] == "1000"
+        and two[0]["file_country_code"] == "CM"
+        and two[0]["name"] == "'-North zone"
+        and two_path.read_text(encoding="utf-8-sig").split("\r\n")[0].count("'=HYPERLINK") == 1
+        and "''=HYPERLINK" not in two_path.read_text(encoding="utf-8-sig"),
+        two[0],
+    )
+    with_geojson = where / "own_columns.geojson"
+    with_geojson.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "name": f"Zone {i}",
+                            "population": 500 * i,
+                            "country_code": "CM",
+                        },
+                        "geometry": {"type": "Polygon", "coordinates": box(11.45, 3.8, 11.6, 3.95)},
+                    }
+                    for i in (1, 2)
+                ],
+            }
+        )
+    )
+    open_file(page, with_geojson)
+    one = save(page, "#file-geojson", where / "own_1.geojson")
+    open_file(page, one)
+    props = json.loads(save(page, "#file-geojson", where / "own_2.geojson").read_text())[
+        "features"
+    ][0]["properties"]
+    check(
+        "the same in GeoJSON",
+        props["file_population"] == 500 and props["file_country_code"] == "CM",
+        props,
+    )
+
+
+def counts_in_passing(browser, url: str, page, where: Path, check: Check) -> None:
+    """A count overtaken by another, a circle round a pole, a click on a copy of the world."""
+    console.print("[bold]Counts in passing[/bold]")
+    context = browser.new_context(locale="en-US", viewport={"width": 1280, "height": 800})
+    fresh = context.new_page()
+    fresh.route("**/static.cloudflareinsights.com/**", lambda route: route.abort())
+    fresh.goto(url)
+    fresh.wait_for_function("() => document.querySelector('#country-pick').options.length > 2")
+    fresh.evaluate(
+        """() => {
+            const real = window.fetch;
+            window.fetch = (u, o) => String(u).includes('CMR')
+                ? new Promise((r) => setTimeout(r, 2500)).then(() => real(u, o))
+                : real(u, o);
+        }"""
+    )
+    fresh.evaluate("() => { setMode('country'); queryCountry('CMR'); }")
+    fresh.wait_for_timeout(300)
+    fresh.evaluate("() => queryCountry('FJI')")
+    fresh.wait_for_function(
+        "() => !inflight && lastResult?.country?.iso3 === 'FJI'", timeout=120000
+    )
+    fresh.wait_for_timeout(5000)
+    said = fresh.text_content("#status")
+    check("an overtaken count's download says nothing", "Downloading" not in said, said)
+    context.close()
+
+    # A circle reaching over the North Pole, as a count and as a row of a file.
+    said = page.evaluate(
+        """async () => {
+            try {
+                await TallyStatic.query(circle([-40, 75], 2000), 0);
+                return null;
+            } catch (err) {
+                return errText(err);
+            }
+        }"""
+    )
+    check("a circle by the pole says so in words", said and "too close" in said, said)
+    pole = where / "pole.csv"
+    pole.write_text("name,latitude,longitude,radius_km\nArctic,75,-40,2000\nYaounde,3.9,11.5,2\n")
+    rows = open_file(page, pole)
+    check("and in a list", "too close" in rows[0]["note"], rows)
+    check("the row beside it still counts", people(rows[1]["value"]) > 0, rows)
+
+    page.evaluate(
+        """() => {
+            if (fileSet) closeFile();
+            setMode('radius');
+            lastResult = null;
+            radiusKm = 50;
+            showRadius();
+            map.jumpTo({ center: [371.5, 3.9], zoom: 6 });
+            setPicking(true);
+        }"""
+    )
+    page.wait_for_timeout(1500)
+    box_ = page.evaluate(
+        "() => { const r = map.getCanvas().getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }"
+    )
+    page.mouse.click(box_[0] + box_[2] * 0.65, box_[1] + box_[3] * 0.5)
+    page.wait_for_function("() => !inflight && lastResult", timeout=120000)
+    where_ = page.evaluate("() => radiusCenter")
+    caption = page.text_content("#counted")
+    check("a click on a copy of the world says the place once", -180 <= where_[0] <= 180, where_)
+    check("and its caption too", not re.search(r"\d{3}\.\d+°E", caption), caption)
+    check("and it counts there", page.evaluate("() => lastResult.total") > 0, caption)
+    page.evaluate("() => clearAll()")
+
+
+def starts_without_basemap(browser, url: str, store: PackStore, check: Check) -> None:
+    """A browser keeps the basemap's style for a day at most, and its host can be down."""
+    console.print("[bold]Starting without the basemap[/bold]")
+    started = "() => map.loaded() && map.getSource('population-cells') && typeof draw !== 'undefined' && draw"
+    filled = "() => document.querySelector('#country-pick').options.length > 2"
+    fiji = store.entries["FJI"]["total"]
+
+    # One visit, a country saved on it, then away from any connection.
+    context = browser.new_context(
+        locale="en-US", viewport={"width": 1280, "height": 800}, accept_downloads=True
+    )
+    context.route("**/tiles.openfreemap.org/**", lambda route: route.abort())
+    context.route("**/static.cloudflareinsights.com/**", lambda route: route.abort())
+    page = context.new_page()
+    page.goto(url)
+    # Not the registration's state: a promise is truthy, so waiting on it does not wait.
+    page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=60000)
+    page.wait_for_function(started, timeout=60000)
+    check("with the host down the map starts", True)
+    check("and says why it is blank", page.is_visible("#no-basemap"), None)
+    page.wait_for_function(filled, timeout=60000)
+    check("the Country tab is there", page.is_visible("#tab-country"), None)
+    page.evaluate("() => TallyStatic.saveCountry('FJI', () => {})")
+
+    context.set_offline(True)
+    page.reload()
+    page.wait_for_function(started, timeout=60000)
+    page.wait_for_function(filled, timeout=60000)
+    check("offline after one visit: the app starts and lists countries", True)
+    check("the note says why the map is blank", page.is_visible("#no-basemap"), None)
+    check("and the map is not in error", "failed" not in page.text_content("#status"), None)
+    total = count_now(page, "() => { setMode('country'); queryCountry('FJI'); }")
+    check(f"a saved country counts offline: {total:,}", total == fiji, [total, fiji])
+    painted = page.evaluate(
+        "() => map.getSource('population-cells')._data.geojson?.features?.length ?? map.querySourceFeatures('population-cells').length"
+    )
+    check("and shows its hexagons", painted > 0, painted)
+    path = save(page, "#export", Path(tempfile.mkdtemp(prefix="tally-image-")) / "offline.png")
+    check("an image saves without the basemap", path.stat().st_size > 10_000, path.stat().st_size)
+    shutil.rmtree(path.parent, ignore_errors=True)
+    context.close()
+
+    # Asked for, but never answered: a connection that hangs says nothing at all.
+    context = browser.new_context(
+        service_workers="block", locale="en-US", viewport={"width": 1280, "height": 800}
+    )
+    context.route("**/static.cloudflareinsights.com/**", lambda route: route.abort())
+    context.route("**/tiles.openfreemap.org/**", lambda route: None)
+    page = context.new_page()
+    page.goto(url)
+    page.wait_for_function(started, timeout=40000)
+    check("a hung connection gets the blank map too", page.is_visible("#no-basemap"), None)
+    context.unroute_all(behavior="ignoreErrors")  # the request still waiting on its answer
+    context.close()
+
+    # A tile that fails is not a style that failed: the map keeps its basemap.
+    style = {
+        "version": 8,
+        "sources": {
+            "streets": {
+                "type": "vector",
+                "tiles": ["https://tiles.openfreemap.org/none/{z}/{x}/{y}.pbf"],
+            }
+        },
+        "layers": [
+            {"id": "keep", "type": "background", "paint": {"background-color": "#123456"}},
+            {"id": "roads", "type": "line", "source": "streets", "source-layer": "roads"},
+        ],
+    }
+    context = browser.new_context(
+        service_workers="block", locale="en-US", viewport={"width": 1280, "height": 800}
+    )
+    context.route("**/static.cloudflareinsights.com/**", lambda route: route.abort())
+
+    def basemap(route):
+        if "/styles/" in route.request.url:
+            route.fulfill(json=style, headers={"Access-Control-Allow-Origin": "*"})
+        else:
+            route.abort()
+
+    context.route("**/tiles.openfreemap.org/**", basemap)
+    page = context.new_page()
+    page.goto(url)
+    page.wait_for_function(started, timeout=60000)
+    check("a failed tile leaves the basemap alone", not page.is_visible("#no-basemap"), None)
+    check("and its style", page.evaluate("() => !!map.getLayer('roads')"), None)
+    context.close()
 
 
 def saved_labels(browser, url: str, page, where: Path, check: Check) -> None:
@@ -987,6 +1331,9 @@ def run(url: str, paths: dict[str, Path], store: PackStore, check: Check) -> Non
         several_files(page, again.parent, paths, check)
         small_things(page, again.parent, paths, check)
         saved_labels(browser, url, page, again.parent, check)
+        edited_lists(page, again.parent, check)
+        counts_in_passing(browser, url, page, again.parent, check)
+        starts_without_basemap(browser, url, store, check)
 
         console.print("[bold]Other formats[/bold]")
         rows = open_file(page, paths["zones.kml"])

@@ -557,11 +557,21 @@ const TallyStatic = (() => {
 
   // h3.geo_to_cells: cells whose centers fall inside, unioned over a MultiPolygon.
   function cover(geometry, res) {
-    if (geometry.type === "Polygon") return h3.polygonToCells(geometry.coordinates, res, true);
-    const all = new Set();
-    for (const rings of geometry.coordinates)
-      for (const c of h3.polygonToCells(rings, res, true)) all.add(c);
-    return [...all];
+    try {
+      if (geometry.type === "Polygon") return h3.polygonToCells(geometry.coordinates, res, true);
+      const all = new Set();
+      for (const rings of geometry.coordinates)
+        for (const c of h3.polygonToCells(rings, res, true)) all.add(c);
+      return [...all];
+    } catch (err) {
+      // H3's "the operation failed" (code 1), on some rings round or near a pole. Those it does
+      // fill it fills correctly: circles round the North Pole matched every cell's distance.
+      if (err?.code !== 1) throw err;
+      throw said(
+        new Error("Tally can't count this shape because it reaches too close to the North or South Pole. Try a smaller one."),
+        "err.nearPole",
+      );
+    }
   }
 
   // polygonToCells leaves out whatever lies past 180 with no error, and a circle or a shape

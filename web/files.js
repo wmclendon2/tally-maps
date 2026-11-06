@@ -192,6 +192,26 @@ const TallyFiles = (() => {
   const withoutOwn = (props) =>
     Object.fromEntries(Object.entries(props).filter(([k]) => !OWN_COLUMNS.has(k)));
 
+  // A spreadsheet rewrites `true` as TRUE, VRAI, WAHR and so on. Tally only ever writes `true`
+  // or nothing, so anything there means set.
+  const isSet = (v) => v !== undefined && v !== null && v !== "" && v !== false;
+
+  // What Tally itself calls a row, in each language it may have been saved in (file.unnamed,
+  // file.unnamedPoint, file.drawnShape and file.drawnShapeNumber; tests/test_i18n.py checks the
+  // lists against them). A marker only says Tally named the row when it was saved: a name a
+  // person has typed over that since is theirs, and stays.
+  const NUMBERED_LABELS = ["Shape", "Forme", "Forma", "Bentuk", "Point", "Punto", "Ponto", "Titik"];
+  const DRAWN_LABELS = ["Drawn shape", "Forme dessinée", "Forma dibujada", "Forma desenhada", "Bentuk yang digambar"];
+  const NUMBERED = new RegExp(`^(?:${NUMBERED_LABELS.join("|")}) \\d+$`);
+  const DRAWN = new RegExp(`^(?:${DRAWN_LABELS.join("|")})(?: \\d+)?$`);
+  const COORDINATES = /\d°.*,.*\d°/; // a drawn circle is named by where it is: 3.900°N, 11.500°E
+  const isOurNumber = (name) => !name || NUMBERED.test(name);
+  const isOurDrawnName = (name) => !name || DRAWN.test(name) || COORDINATES.test(name);
+
+  // The apostrophe safeCell (app.js) put before a word a spreadsheet would run, taken off again:
+  // it would otherwise become part of the name once the file is reopened.
+  const unguarded = (v) => (/^'[=+\-@\t\r]/.test(v) ? v.slice(1) : v);
+
   // Before F-41 a count's name was its image's title, in the language it was saved in.
   const OLD_SHAPE_TITLES = new Set([
     "Population inside a drawn shape",
@@ -224,7 +244,7 @@ const TallyFiles = (() => {
   function savedRow(row, props) {
     if (props?.counted_with !== COUNTED_WITH) return row;
     // Only Tally's number for a row with no name: it is numbered afresh, in today's language.
-    if (props.auto_named === true) row = { ...row, name: null };
+    if (isSet(props.auto_named) && isOurNumber(row.name)) row = { ...row, name: null };
     const out = { ...row, props: withoutOwn(props) };
     // A whole country or continent is saved with its hexagons and no outline: Tally picks it
     // again if it is all that was opened, and a list says where to find it.
@@ -237,9 +257,8 @@ const TallyFiles = (() => {
         (props.kind === "continent" ? `continent:${props.name}` : null);
       return out;
     }
-    if (row.problem) return row;
     const center = [props.longitude, props.latitude];
-    if (props.kind === "circle" && isOutlineOf(row.geometry, center, props.radius_km)) {
+    if (!row.problem && props.kind === "circle" && isOutlineOf(row.geometry, center, props.radius_km)) {
       delete out.geometry;
       out.kind = "circle";
       out.fallback = ["file.unnamedPoint", row.fallback[1]];
@@ -247,7 +266,7 @@ const TallyFiles = (() => {
       out.radiusKm = props.radius_km;
     }
     const oldCircle = row.name?.match(OLD_CIRCLE_TITLE);
-    if (props.drawn === true || OLD_SHAPE_TITLES.has(row.name)) {
+    if ((isSet(props.drawn) && isOurDrawnName(row.name)) || OLD_SHAPE_TITLES.has(row.name)) {
       out.drawn = true;
       out.name = null;
     } else if (oldCircle) {
@@ -276,27 +295,28 @@ const TallyFiles = (() => {
       return Number(delimiter === "," ? s : s.replace(",", "."));
     };
     return table.slice(1).map((cells, i) => {
-      const props = Object.fromEntries(table[0].map((h, c) => [h.trim(), cells[c] ?? ""]));
+      let props = Object.fromEntries(table[0].map((h, c) => [h.trim(), cells[c] ?? ""]));
       const own = props.counted_with === COUNTED_WITH;
+      if (own) props = Object.fromEntries(Object.entries(props).map(([k, v]) => [unguarded(k), unguarded(v)]));
+      const typed = cells[nameAt]?.trim() || null;
       const row = {
-        name: cells[nameAt]?.trim() || null,
+        name: own && typed ? unguarded(typed) : typed,
         fallback: ["file.unnamedPoint", { n: i + 1 }],
         kind: "circle",
         props: own ? withoutOwn(props) : props,
       };
-      if (own && props.drawn === "true") {
+      if (own && isSet(props.drawn) && isOurDrawnName(row.name)) {
         row.drawn = true;
         row.name = null;
       }
-      if (own && props.auto_named === "true") {
-        row.name = null;
-        // A shape has no coordinates in a CSV, so it stays a row that says so, and still a shape.
-        if (props.kind === "shape") row.fallback = ["file.unnamed", { n: i + 1 }];
-      }
+      if (own && isSet(props.auto_named) && isOurNumber(row.name)) row.name = null;
       const y = number(cells[lat]);
       const x = number(cells[lng]);
       if (!(Math.abs(y) <= 90 && Math.abs(x) <= 540)) {
         row.problem = { key: "file.problemBadPoint" };
+        // A shape has no coordinates in a CSV, so it stays a row that says so, and still a shape.
+        if (own && props.kind) row.kind = props.kind;
+        if (own && props.kind === "shape") row.fallback = ["file.unnamed", { n: i + 1 }];
         return row;
       }
       row.center = [x, y];
@@ -492,8 +512,9 @@ const TallyFiles = (() => {
     if (!members) throw new FileProblem("file.errRead", { name });
     const of = (...exts) => members.filter((m) => exts.includes(extension(m.name)));
     if (of("shp").length) {
-      // shpjs unpacks every member at once, so the limit has to cover them all, before it does.
-      const size = members.reduce((sum, m) => sum + m.size, 0);
+      // shpjs unpacks all of these at once and leaves the rest of the zip alone (its filter is
+      // the same list), so a Shapefile beside a large photo opens.
+      const size = of("shp", "dbf", "json", "prj", "cpg").reduce((sum, m) => sum + m.size, 0);
       if (size > MAX_BYTES) throw new FileProblem("file.errTooBigUnzipped", tooBig(size, name));
       const shp = await library("shp");
       try {
@@ -592,5 +613,5 @@ const TallyFiles = (() => {
     return { name, rows };
   }
 
-  return { read, FileProblem, MAX_ROWS, MAX_BYTES };
+  return { read, FileProblem, MAX_ROWS, MAX_BYTES, OWN_COLUMNS, COUNTED_WITH };
 })();

@@ -310,6 +310,11 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .update button { flex: none; }
 
+.map-note {
+  position: absolute; top: 12px; right: 56px; z-index: 2; max-width: min(320px, calc(100vw - 84px));
+  padding: 8px 12px; border-radius: 8px; background: var(--paper); color: var(--ink);
+  font-size: 13px; box-shadow: var(--shadow); pointer-events: none;
+}
 .status { margin-top: 12px; font-size: 13px; color: var(--muted); }
 .status:empty { display: none; }
 .status.error { color: var(--error); }

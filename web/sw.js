@@ -11,7 +11,7 @@
 // if the two drift apart. The query string is what stops a freshly fetched index.html from pairing with a stale cached
 // app.js: a mismatched pair once shipped black hexagons and a dead detail toggle with no
 // error at all, because the old script read a field the new answers no longer carried.
-const SHELL_VERSION = "72";
+const SHELL_VERSION = "73";
 const CACHE = `tally-shell-v${SHELL_VERSION}`;
 const SHELL = [
   "./",
@@ -44,11 +44,33 @@ const SHELL = [
   "./vendor/@fontsource/barlow-semi-condensed@5.3.0/barlow-semi-condensed-latin-600-normal.woff2",
 ];
 
+// The page reads these before a first visit's worker controls it, and a new version's cache
+// starts empty, so without this the list of countries is not there offline until a later
+// visit, and a country saved today cannot be opened. The same path as index.html's tally-data.
+// Never fails the install: `web/` alone has no data, and the page's own reads fill it in later.
+const DATA_MANIFEST = "./data/manifest.json";
+
+async function precacheData(cache) {
+  const keep = async (url) => {
+    const res = await fetch(url, { cache: "no-cache" });
+    if (!res.ok) throw new Error(`${url.pathname}: HTTP ${res.status}`);
+    await cache.put(url, res.clone());
+    return res;
+  };
+  try {
+    const base = new URL(DATA_MANIFEST, self.location.href);
+    const manifest = await (await keep(base)).json();
+    await Promise.all([manifest.catalog, manifest.nodata].map((path) => keep(new URL(path, base))));
+  } catch (err) {
+    console.warn("data not stored for offline yet:", err);
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((c) => c.addAll(SHELL))
+      .then((c) => c.addAll(SHELL).then(() => precacheData(c)))
       .then(() => self.skipWaiting()),
   );
 });

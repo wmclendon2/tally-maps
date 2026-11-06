@@ -40,6 +40,21 @@ def loader_languages() -> list[str]:
     return re.findall(r"^\s*(\w+):", block, re.MULTILINE)
 
 
+def test_files_js_knows_tallys_labels_in_every_language():
+    """A marker in a saved list drops a name only while it is one of these (F-43)."""
+    files = (WEB / "files.js").read_text()
+
+    def listed(name):
+        return set(re.findall(r'"([^"]+)"', re.search(rf"{name} = \[(.*?)\]", files).group(1)))
+
+    for path in LANG_FILES:
+        words = json.loads(path.read_text())
+        for key in ("file.unnamed", "file.unnamedPoint"):
+            assert words[key].removesuffix(" {n}") in listed("NUMBERED_LABELS"), (path.stem, key)
+        assert words["file.drawnShape"] in listed("DRAWN_LABELS"), path.stem
+        assert words["file.drawnShapeNumber"] == words["file.drawnShape"] + " {n}", path.stem
+
+
 def test_every_language_the_loader_offers_has_a_file_and_is_precached():
     langs = loader_languages()
     assert "en" in langs

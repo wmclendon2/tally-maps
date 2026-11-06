@@ -24,6 +24,15 @@ const fmtFixed = (x, places) =>
 const fmtMB = (b) => (b > 0 && b < 5e4 ? `<${fmtFixed(0.1, 1)}` : fmtFixed(b / 1e6, b >= 1e7 ? 0 : 1));
 // index.html preconnects to this host, so keep the two in step.
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// What the map starts on when that style cannot be read: a browser keeps its copy for a day
+// at most, and the host can be down. Everything but the streets and place names works without it.
+const BLANK_STYLE = {
+  version: 8,
+  sources: {},
+  layers: [{ id: "background", type: "background", paint: { "background-color": "#efece4" } }],
+};
+const STYLE_WAIT_MS = 15000; // a connection that hangs says nothing, so it gets this long
+let basemapStyle = BASEMAP_STYLE;
 // The map opens on the view the data's bbox will fit, so a first visit loads one set of
 // tiles: it used to open on Cameroon and jump to the world once the manifest came, which
 // fetched and drew Cameroon's tiles for nothing (F-25). The bbox of every country; a build
@@ -217,13 +226,38 @@ function setStatus(text, isError = false) {
 
 // ---- map ---------------------------------------------------------------------
 
+// A map that never reads its style never fires "load", and the app hangs off that event. An
+// error with no source or tile is the style's own: a tile that fails is not a reason to give up.
+function startWithoutBasemap(m, gaveUp) {
+  let settled = false;
+  const blank = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(wait);
+    m.setStyle(BLANK_STYLE, { diff: false });
+    gaveUp?.();
+  };
+  const wait = setTimeout(blank, STYLE_WAIT_MS);
+  m.on("style.load", () => {
+    settled = true;
+    clearTimeout(wait);
+  });
+  m.on("error", (e) => {
+    if (!e.sourceId && !e.tile) blank();
+  });
+}
+
 const map = new maplibregl.Map({
   container: "map",
-  style: BASEMAP_STYLE,
+  style: basemapStyle,
   bounds: START_BOUNDS,
   fitBoundsOptions: { padding: panelPadding() },
   // The attribution control is added once the manifest says what to credit.
   attributionControl: false,
+});
+startWithoutBasemap(map, () => {
+  basemapStyle = BLANK_STYLE; // a saved image starts where the map did
+  $("no-basemap").hidden = false;
 });
 map.on("style.load", () => localizeLabels(map));
 map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -854,7 +888,9 @@ $("pick-point").addEventListener("click", () => setPicking(!pickingPoint));
 map.on("click", (e) => {
   if (!pickingPoint) return;
   setPicking(false);
-  radiusCenter = [e.lngLat.lng, e.lngLat.lat];
+  // On a copy of the world beside the first, a click reads 373.258°: a place is said once.
+  const { lng, lat } = e.lngLat.wrap();
+  radiusCenter = [lng, lat];
   queryRadius();
 });
 
@@ -1454,19 +1490,26 @@ const downloadText = ({ received, total, names, iso3s }) => {
   const shown = iso3s ? iso3s.map((c, i) => placeName(c, names[i])) : names;
   return t("status.downloading", { names: listNames(shown), got: fmtMB(received), total: fmtMB(total) });
 };
-const showDownload = (progress) => {
-  if (progress.total) setStatus(downloadText(progress));
+// A download goes on after a newer count replaces the one that asked for it, and only the
+// count in hand may speak: the old one's progress would stand under the new one's answer.
+const downloadNotice = () => {
+  const mine = inflight;
+  return (progress) => {
+    if (inflight === mine && progress.total) setStatus(downloadText(progress));
+  };
 };
 
 async function staticQuery(geometry) {
+  const notice = downloadNotice();
   // Let "Querying…" paint before the synchronous polyfill and lookup run.
   await new Promise((r) => setTimeout(r, 0));
-  return TallyStatic.query(geometry, DETAIL_STEP[detail], showDownload);
+  return TallyStatic.query(geometry, DETAIL_STEP[detail], notice);
 }
 
 async function countryQuery(iso3) {
+  const notice = downloadNotice();
   await new Promise((r) => setTimeout(r, 0));
-  return TallyStatic.country(iso3, DETAIL_STEP[detail], showDownload);
+  return TallyStatic.country(iso3, DETAIL_STEP[detail], notice);
 }
 
 // Population sources as the result line and the exported image name them.
@@ -1631,13 +1674,14 @@ function renderMap({ width, height, setup }) {
     document.body.appendChild(el);
     const m = new maplibregl.Map({
       container: el,
-      style: BASEMAP_STYLE,
+      style: basemapStyle,
       interactive: false,
       attributionControl: false,
       preserveDrawingBuffer: true,
       pixelRatio: 2,
       fadeDuration: 0,
     });
+    startWithoutBasemap(m);
     m.on("style.load", () => localizeLabels(m));
     const done = () => {
       try {
@@ -1653,9 +1697,6 @@ function renderMap({ width, height, setup }) {
         reject(err);
       }
     };
-    m.on("error", (e) => {
-      if (e.error && /style/i.test(String(e.error.message))) reject(e.error);
-    });
     m.on("load", () => {
       setup(m);
       m.once("idle", done);
@@ -1931,8 +1972,6 @@ const roundCoords = (c) => (typeof c[0] === "number" ? c.map((x) => round(x, 6))
 
 // A row with no name of its own: the label in a saved file is only Tally's number for it.
 const autoNamed = (row) => row && !row.drawn && !row.name;
-// Columns a saved file reads back only when set, so a file's own column of that name moves aside.
-const MARKER_COLUMNS = ["drawn", "auto_named"];
 
 // What a saved count needs to come back as it was (F-41): a circle's center and radius,
 // `drawn` when Tally named it rather than a person or a file, and `auto_named` when a file
@@ -2411,7 +2450,8 @@ window.addEventListener("drop", (e) => {
 });
 
 // Saved beside what the file already said about each row. A file's own column of the same
-// name as one of Tally's keeps its values as file_<name>.
+// name as any Tally reads back as its own keeps its values as file_<name>, or reopening the
+// saved file would take them for Tally's and drop them.
 function fileColumns(row) {
   const res = row.result;
   const counted = res
@@ -2420,7 +2460,7 @@ function fileColumns(row) {
           source: res.source, resolution: res.resolution, populated_cells: res.populated_cells },
         row,
       )
-    : { name: rowName(row), kind: row.kind };
+    : { name: rowName(row), kind: row.kind, counted_with: TallyFiles.COUNTED_WITH };
   const value = rowValue(row);
   const note = value.note || (res && !res.covered ? t("file.noData") : "");
   const summary = { ...counted, note };
@@ -2435,11 +2475,11 @@ function fileColumns(row) {
   return summary;
 }
 
-const ownColumns = (row, taken) =>
+const ownColumns = (row) =>
   Object.fromEntries(
     Object.entries(row.props ?? {})
       .filter(([, v]) => v === null || typeof v !== "object")
-      .map(([k, v]) => [taken.has(k) ? `file_${k}` : k, v]),
+      .map(([k, v]) => [TallyFiles.OWN_COLUMNS.has(k) ? `file_${k}` : k, v]),
   );
 
 // A file's words go into a spreadsheet that may run them: =, +, - or @ opens a formula, so
@@ -2449,10 +2489,12 @@ const safeCell = (v) =>
 
 function exportFileCsv() {
   const ours = Object.keys(fileColumnKeys());
-  const taken = new Set([...ours, ...MARKER_COLUMNS]);
-  const rows = fileSet.rows.map((row) => ({ summary: fileColumns(row), own: ownColumns(row, taken) }));
+  const rows = fileSet.rows.map((row) => ({ summary: fileColumns(row), own: ownColumns(row) }));
   const keys = [...new Set([...ours, ...rows.flatMap((r) => Object.keys(r.own))])];
-  const lines = [keys, ...rows.map((r) => keys.map((k) => safeCell((k in r.summary ? r.summary : r.own)[k])))];
+  const lines = [
+    keys.map(safeCell),
+    ...rows.map((r) => keys.map((k) => safeCell((k in r.summary ? r.summary : r.own)[k]))),
+  ];
   const text = lines.map((line) => line.map(csvField).join(",")).join("\r\n");
   const blob = new Blob(["﻿" + text + "\r\n"], { type: "text/csv;charset=utf-8" });
   setStatus(t("status.saved", { file: saveFile(blob, "csv", "list") }));
@@ -2478,15 +2520,12 @@ function fileColumnKeys() {
 // The file's shapes with what was counted in each: no hexagons, which would run to hundreds
 // of MB across a list; picking a row saves its own (Save, under its count).
 function exportFileGeojson() {
-  const taken = new Set(Object.keys(fileColumnKeys()));
-  taken.add("population");
-  for (const k of MARKER_COLUMNS) taken.add(k);
   const features = fileSet.rows.map((row) => {
     const { population_estimate: population = null, ...summary } = fileColumns(row);
     const geometry = rowGeometry(row);
     return {
       type: "Feature",
-      properties: { ...ownColumns(row, taken), name: summary.name, kind: summary.kind,
+      properties: { ...ownColumns(row), name: summary.name, kind: summary.kind,
                     population: population === "" ? null : population, ...summary },
       geometry: geometry && { type: geometry.type, coordinates: roundCoords(geometry.coordinates) },
     };
