@@ -9,7 +9,7 @@ and sums the cells from the packs decoded in Python. web/static.js must give the
 resolution, cell counts and totals for each: run `TallyStatic.query` on the same polygons
 in the demo page and compare (scripts/browser_parity.py does that in headless Chrome).
 Covers one-part and multi-part countries, cross-border boxes, islands, open ocean, a
-sub-cell polygon and the Fine step. A case whose countries are not in the pack directory
+sub-cell polygon, the Fine step and longitudes past 180. A case whose countries are not in the pack directory
 is skipped, so the same list works for a three-country demo and for the full set.
 """
 
@@ -52,6 +52,9 @@ CASES = {
     "mahe-fine": ((55.35, -4.8, 55.55, -4.55), 1),  # SYC, the smallest pack
     "kinshasa-brazzaville": ((15.1, -4.5, 15.5, -4.15), 0),  # COD/COG across the river
     "busia-border": ((34.0, 0.35, 34.25, 0.55), 0),  # KEN/UGA
+    # Added 2026-11-05 (F-39): longitudes past 180, as a circle or a drawn shape gives them.
+    "taveuni-across-180": ((179.7, -17.1, 180.3, -16.5), 0),  # FJI on both sides of the line
+    "lau-past-180": ((181.0, -18.4, 181.4, -18.0), 0),  # FJI, every corner past the line
 }
 # The countries each case needs; a case runs only when all of them are packed.
 NEEDS = {
@@ -73,6 +76,8 @@ NEEDS = {
     "mahe-fine": {"SYC"},
     "kinshasa-brazzaville": {"COD", "COG"},
     "busia-border": {"KEN", "UGA"},
+    "taveuni-across-180": {"FJI"},
+    "lau-past-180": {"FJI"},
 }
 
 

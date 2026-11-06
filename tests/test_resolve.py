@@ -89,3 +89,31 @@ def test_normal_resolution_does_not_depend_on_the_cell_ceiling():
     """The old coupling is what made the toggle a no-op on a large shape."""
     base = resolve(CAMEROON_BOX, 9, detail=0).resolution
     assert resolve(CAMEROON_BOX, 9, detail=0, max_cells=40000).resolution == base
+
+
+def _box(w, s, e, n):
+    return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
+
+
+def test_resolve_counts_cells_past_180():  # F-39: a polyfill drops them with no error
+    across = resolve(_box(179.5, -17, 180.5, -16), 9, resolution=5).cells
+    west = h3.geo_to_cells(_box(179.5, -17, 180, -16), 5)
+    east = h3.geo_to_cells(_box(-180, -17, -179.5, -16), 5)
+    assert set(across) == set(west) | set(east)
+    assert east  # the side the fill had been dropping
+
+
+def test_resolve_wraps_shapes_wholly_past_180():
+    expected = h3.geo_to_cells(_box(-179.8, -17, -179.2, -16), 5)
+    assert resolve(_box(180.2, -17, 180.8, -16), 9, resolution=5).cells == sorted(expected)
+    # Scrolled a world over to the west as well.
+    expected = h3.geo_to_cells(_box(11.42, 3.77, 11.62, 3.97), 8)
+    assert resolve(_box(-348.58, 3.77, -348.38, 3.97), 9, resolution=8).cells == sorted(expected)
+
+
+def test_wrapping_leaves_the_edge_and_the_input_alone():
+    box = _box(179.5, -17, 180.5, -16)
+    resolve(box, 9, resolution=5)
+    assert box == _box(179.5, -17, 180.5, -16)
+    edge = _box(179.5, -17, 180, -16)
+    assert resolve(edge, 9, resolution=5).cells == sorted(h3.geo_to_cells(edge, 5))

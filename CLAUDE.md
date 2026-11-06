@@ -82,7 +82,9 @@ Read it before changing the pipeline, the pack format or the resolver.
   outlines stop at it, so `raster.clip_for_grid` adds the outline moved by 360° (F-37: the
   clip had dropped Fiji's 14,298 east of 180 and the Chatham Islands' 627). Anything else
   that reads a grid against an outline needs the same; `audit_overlaps.py` does not (no
-  overlap is near 180 today). Meta's KIR file has no one east of 180 (no Line Islands).
+  overlap is near 180 today). Meta's KIR file has no one east of 180 (no Line Islands), and its FJI file no one from
+  179.824 E to 179.912 W, a gap in the raster itself (Rabi, Waiyevo and Somosomo read empty).
+  A shape past 180 is a separate matter: `resolve.py` and static.js wrap its longitudes (F-39).
 - Some Meta GeoTIFFs store strips out of row order; `raster_to_h3` reads those in file
   order (`read_order="auto"`), or reading a zip member backwards re-inflates (DZA 26 min ->
   99 s). Compute is ~2.7 s per GB of uncompressed raster.

@@ -521,6 +521,12 @@ Candidates still open:
   (`boundaries.CLIP_GROW_DEG`) or use Natural Earth's coast. Likely candidates: Kiribati,
   the Marshall Islands, Tuvalu, the Maldives, Micronesia, Tokelau. Effort: S to check,
   S–M to repair and rebuild.
+- **F-39:** found 2026-11-05 while shaping F-02. A polygon fill leaves out whatever lies past
+  180° with no error, and a Radius circle or a drawn shape across the line runs past it: a
+  50 km circle on Taveuni counted 9,272 of 15,103 people (res 8), and a shape wholly past
+  the line counted nobody. `static.js` and `ingest/resolve.py` now wrap longitudes before
+  the fill; two new parity cases cover it (20 in all). Uploaded files (F-02) go through the
+  same path. Effort: S.
 - **F-18:** parked because it needs a server and conflicts with the privacy promise.
   Revisit if F-02 shows demand beyond what a browser can handle.
 
@@ -562,3 +568,4 @@ Candidates still open:
 | F-04 | Export results as CSV and GeoJSON; countries framed on their people; clearer saved images | 2026-11-01 |
 | F-37 | People across the 180° line: Fiji +14,298 (Taveuni, Lau), New Zealand +627 (Chatham Islands) | 2026-11-01 |
 | F-01 | French, Spanish, Portuguese and Indonesian (drafts, corrections invited): the panel, About, errors, the saved image and the map's place names; a globe beside the ? to switch | 2026-11-02 |
+| F-39 | People past the 180° line: a Radius circle or drawn shape across it is counted in full (50 km on Taveuni: 15,103, was 9,272) | 2026-11-05 |

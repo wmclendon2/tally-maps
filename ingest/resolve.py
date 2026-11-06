@@ -34,6 +34,19 @@ class Resolved:
     approx_area_km2: float
 
 
+def _wrap_longitudes(coords: list) -> list:
+    """Coordinates with every longitude back in [-180, 180], in a new list.
+
+    A polygon fill leaves out whatever lies past 180 with no error, and a circle or a shape
+    drawn across the 180th meridian runs past it (F-39: a 50 km circle on Taveuni lost 39%
+    of its people). Wrapped, the ring jumps from +179 to -179, which H3 reads as crossing.
+    """
+    if isinstance(coords[0], (int, float)):
+        lng = coords[0]
+        return [(lng + 180) % 360 - 180 if abs(lng) > 180 else lng, *coords[1:]]
+    return [_wrap_longitudes(c) for c in coords]
+
+
 def _geometry(geojson: dict) -> dict:
     """Unwrap Feature/FeatureCollection to a single Polygon or MultiPolygon."""
     t = geojson.get("type")
@@ -46,7 +59,7 @@ def _geometry(geojson: dict) -> dict:
         return _geometry(feats[0]["geometry"])
     if t not in ("Polygon", "MultiPolygon"):
         raise ValueError(f"geometry must be a Polygon or MultiPolygon, got {t!r}")
-    return geojson
+    return {"type": t, "coordinates": _wrap_longitudes(geojson["coordinates"])}
 
 
 def polygon_area_km2(geometry: dict) -> float:

@@ -157,9 +157,10 @@ uv run --group browser python scripts/browser_parity.py [--dist DIR]
 ```
 
 `scripts/static_parity.py` computes the Python answers (`ingest/resolve.py` over the packs)
-for 18 shapes: one-part and multi-part countries (NGA, ETH, all of Brazil), islands (MUS,
+for 20 shapes: one-part and multi-part countries (NGA, ETH, all of Brazil), islands (MUS,
 SYC), borders (Garoua-Boulaï between CMR and CAF, COD/COG, KEN/UGA), open ocean, a shape
-smaller than one cell, and Normal and Fine. `browser_parity.py` serves a built `dist/`, runs
+smaller than one cell, longitudes past 180° (FJI, across the line and wholly beyond it), and
+Normal and Fine. `browser_parity.py` serves a built `dist/`, runs
 each shape through `TallyStatic.query` in headless Chrome from empty storage, and compares
 the resolution, cell counts and totals. A small build runs only the cases its countries
 cover.

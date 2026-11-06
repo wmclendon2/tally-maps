@@ -470,6 +470,14 @@ const TallyStatic = (() => {
     return [...all];
   }
 
+  // polygonToCells leaves out whatever lies past 180 with no error, and a circle or a shape
+  // drawn across the 180th meridian runs past it (F-39: a 50 km circle on Taveuni lost 39%
+  // of its people). Wrapped, the ring jumps from +179 to -179, which H3 reads as crossing.
+  const wrapLongitudes = (coords) =>
+    typeof coords[0] === "number"
+      ? [Math.abs(coords[0]) > 180 ? ((((coords[0] + 180) % 360) + 360) % 360) - 180 : coords[0], ...coords.slice(1)]
+      : coords.map(wrapLongitudes);
+
   function unwrap(g) {
     if (g.type === "Feature") return unwrap(g.geometry);
     if (g.type === "FeatureCollection") {
@@ -478,7 +486,7 @@ const TallyStatic = (() => {
     }
     if (g.type !== "Polygon" && g.type !== "MultiPolygon")
       throw new Error(`geometry must be a Polygon or MultiPolygon, got ${g.type}`);
-    return g;
+    return { type: g.type, coordinates: wrapLongitudes(g.coordinates) };
   }
 
   function polygonAreaKm2(geometry) {
