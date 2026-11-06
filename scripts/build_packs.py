@@ -37,6 +37,11 @@ Uint32Array/Float32Array views require. A pack carries its own header because a 
 pack outlives the catalog that listed it: the client must be able to read (or refuse)
 it without trusting that today's catalog still describes it.
 
+A continent has one overview pack (`tier: "overview"`, same layout): its countries merged at
+OVERVIEW_LEVELS only. build_static.py writes them for what it builds. They live in the
+catalog's `continents`, apart from `countries`, and have no footprint: a drawn shape must
+never read them, or it would count the same people twice.
+
 Each part's `footprint` in the catalog is its res-3 cells. A query cell can only draw
 population from a part whose footprint holds the cell's res-3 parent, so the client can
 name exactly the parts a polygon needs with no country outlines at all.
@@ -68,6 +73,9 @@ from ingest.continents import continent_name, name_of
 
 MAGIC = b"TLYP"
 FORMAT = (1, 0)
+# The levels a continent's overview holds. Normal is the finest within 4,000 cells: res 3 for
+# all six (1,100 to 3,800 cells). Fine is one finer: res 4, at most about 20,000.
+OVERVIEW_LEVELS = (3, 4)
 FIXED = struct.Struct("<4sHHI")  # magic, major, minor, header length
 ALIGN = 8
 SOURCE = "meta_hrsl"
@@ -556,7 +564,86 @@ def load_entries(out: Path) -> dict[str, dict]:
     }
 
 
-def write_catalog(out: Path, entries: dict[str, dict]) -> dict:
+def part_levels(path: Path, wanted: tuple[int, ...]) -> dict:
+    """Only these resolutions of one pack file."""
+    raw = gzip.decompress(path.read_bytes())
+    header, start = unpack(raw)
+    sections = [s for s in header["sections"] if s["resolution"] in wanted]
+    return {r: (c, p.astype(np.float64)) for r, (c, p) in decode(raw[start:], sections).items()}
+
+
+def build_overview(continent: str, members: list[dict], root: Path) -> tuple[bytes, dict]:
+    """One continent's overview pack, gzipped, and its catalog entry (F-33).
+
+    `iso3` is the code the picker and TallyStatic.country use for it. The entry answers to
+    everything a country's does: countryResolution reads the same fields.
+    """
+    pieces = [part_levels(root / p["url"], OVERVIEW_LEVELS) for e in members for p in e["parts"]]
+    levels = merge(pieces)
+    total = sum(e["total"] for e in members)
+    code = f"continent:{continent}"
+    source = ", ".join(sorted({k for e in members for k in source_keys(e["source"])}))
+    body, sections = encode(levels)
+    header = {
+        "iso3": code,
+        "name": continent,
+        "part": 0,
+        "parts": 1,
+        "source": source,
+        "tier": "overview",
+        "min_resolution": min(levels),
+        "max_resolution": max(levels),
+        "total": total,
+        "sections": sections,
+    }
+    raw = pack_bytes(header, body)
+    check(raw, levels)  # every level comes to the sum of the countries' totals
+    packed = gzip.compress(raw, 9, mtime=0)
+    digest = hashlib.sha256(packed).hexdigest()
+    slug = continent.lower().replace(" ", "-")
+    part = {
+        "url": f"continent-{slug}.{digest[:10]}.tlyp.gz",
+        "bytes": len(packed),
+        "raw_bytes": len(raw),
+        "sha256": digest,
+        "raw_sha256": hashlib.sha256(raw).hexdigest(),
+        "cells": int(sum(s["count"] for s in sections)),
+        "total": total,
+    }
+    entry = {
+        "iso3": code,
+        "key": continent,
+        "name": continent,
+        "source": source,
+        "total": total,
+        "area_km2": round(sum(e["area_km2"] for e in members), 1),
+        "countries": sorted(e["iso3"] for e in members),
+        "max_resolution": max(levels),
+        "cells_by_resolution": {str(r): int(levels[r][0].size) for r in sorted(levels)},
+        "bytes": len(packed),
+        "parts": [part],
+    }
+    return packed, entry
+
+
+def write_overviews(out: Path, entries: dict[str, dict]) -> list[dict]:
+    """Write each continent's overview pack beside the packs; their catalog entries."""
+    by_continent: dict[str, list[dict]] = {}
+    for e in entries.values():
+        enrich(e, out)
+        if continent := continent_name(e["iso3"]):
+            by_continent.setdefault(continent, []).append(e)
+    found = []
+    for continent in sorted(by_continent):
+        packed, entry = build_overview(continent, by_continent[continent], out)
+        (out / entry["parts"][0]["url"]).write_bytes(packed)
+        found.append(entry)
+    return found
+
+
+def write_catalog(
+    out: Path, entries: dict[str, dict], continents: list[dict] | None = None
+) -> dict:
     sources = sorted({k for e in entries.values() for k in source_keys(e["source"])})
     for e in entries.values():
         enrich(e, out)
@@ -574,6 +661,8 @@ def write_catalog(out: Path, entries: dict[str, dict]) -> dict:
             for k in sorted(entries)
         ],
     }
+    if continents:
+        catalog["continents"] = continents
     (out / "catalog.json").write_text(json.dumps(catalog, separators=(",", ":")))
     return catalog
 

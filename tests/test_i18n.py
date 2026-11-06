@@ -76,6 +76,20 @@ def test_a_language_has_every_key_with_the_same_placeholders(path):
             assert all(placeholders(v) <= placeholders(EN[key]) for v in value.values())
 
 
+@pytest.mark.parametrize("path", [I18N / "en.json", *LANG_FILES], ids=lambda p: p.stem)
+def test_a_key_appears_once(path):
+    """JSON keeps the last of two: a change to the first would never reach the screen."""
+
+    def no_repeats(pairs):
+        keys = [k for k, _ in pairs]
+        assert len(keys) == len(set(keys)), (
+            f"{path.name} repeats {sorted(k for k in keys if keys.count(k) > 1)}"
+        )
+        return dict(pairs)
+
+    json.loads(path.read_text(), object_pairs_hook=no_repeats)
+
+
 @pytest.mark.parametrize("path", LANG_FILES, ids=lambda p: p.stem)
 def test_links_in_a_translation_go_where_the_english_ones_do(path):
     table = json.loads(path.read_text())

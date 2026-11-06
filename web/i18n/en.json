@@ -42,7 +42,7 @@
   "coord.e": "{v}°E",
   "coord.w": "{v}°W",
 
-  "country.how": "Everyone in one country or territory, counted from its own data.",
+  "country.how": "Everyone in one country, territory or continent, counted from its own data.",
   "country.choose": "Choose a country…",
 
   "count.close": "Close this count",
@@ -52,6 +52,7 @@
   "counted.country": { "one": "person in {country}", "other": "people in {country}" },
   "counted.source": "Whole country, {source} data",
   "counted.sourceYear": "Whole country, {source} data from {year}",
+  "counted.sourceContinent": {"one": "{source} data, {n} country or territory. A country counts whole in one continent: Russia in Europe, Turkey in Asia, Egypt in Africa.", "other": "{source} data, {n} countries and territories. A country counts whole in one continent: Russia in Europe, Turkey in Asia, Egypt in Africa."},
   "fact.area": "Area",
   "fact.density": "Density",
   "unit.per": "per {area}",
@@ -154,6 +155,7 @@
   "continent.Oceania": "Oceania",
   "continent.South America": "South America",
   "continent.Other": "Other",
+  "continent.all": "All of {continent}",
 
   "saved.downloading": "Downloading…",
   "saved.groupAll": { "one": "{n} country, all saved, {mb} MB", "other": "{n} countries, all saved, {mb} MB" },

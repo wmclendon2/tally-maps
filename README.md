@@ -5,7 +5,7 @@ Draw a shape on a map and see how many people live inside it, with a density hea
 **Try it: https://tallymaps.org**
 
 - **Shape:** draw any polygon. **Radius:** everyone within a distance of a point.
-  **Country:** a whole country at once. **File:** every shape or point in a file you open.
+  **Country:** a whole country or continent at once. **File:** every shape or point in a file you open.
 - 233 countries and territories, from 30 m population estimates (100 m for the 38 that
   Meta's maps leave out, among them China, Russia, Pakistan, Canada and Iran).
 - Runs entirely in your browser. Country data downloads on first use and stays available
@@ -128,7 +128,8 @@ None of these are tracked by git.
   corner again. On a touch screen, move the map under the crosshair, tap **Add corner** for
   each corner, then **Finish**.
 - **Radius:** set the distance, press **Pick a point** and click the map.
-- **Country:** pick a country for its whole population, area and density.
+- **Country:** pick a country, or a whole continent at the head of its group, for its population,
+  area and density.
 - **File:** press **Open a file**, or drop one anywhere on the page: GeoJSON, KML, KMZ, a zipped
   Shapefile, or a CSV with `latitude` and `longitude` columns (and `name` and `radius_km` if
   you have them). Up to 500 rows. Every row is counted and listed; click one for its heatmap,

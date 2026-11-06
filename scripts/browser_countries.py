@@ -186,6 +186,35 @@ def run_browser(url: str, isos: list[str], stress: dict) -> tuple[dict, list[dic
             sample(f"country {iso3}", time.perf_counter() - t)
             if i % 25 == 0 or i == len(isos):
                 console.print(f"  {i}/{len(isos)} countries, {samples[-1]['mb']:.0f} MB")
+        # A continent's overview must survive the tidy-up a page load does, and answer with
+        # no connection; and having read them must change no drawn shape's count.
+        whole = [i for i in isos if i.startswith("continent:")]
+        again = next(iter(stress.items()), None)
+        if whole:
+            before = None
+            if again:
+                before = page.evaluate(
+                    "async ([g, d]) => (await TallyStatic.query(g, d)).total", list(again[1])
+                )
+            page.reload()
+            page.wait_for_function("typeof TallyStatic !== 'undefined'")
+            page.wait_for_timeout(1000)
+            page.context.set_offline(True)
+            for code in whole:
+                r = page.evaluate(
+                    "async (c) => { await TallyStatic.load("
+                    "document.querySelector('meta[name=tally-data]').content);"
+                    " const r = await TallyStatic.country(c, 0);"
+                    " return {total: r.total, missing: r.missing}; }",
+                    code,
+                )
+                if r["missing"] or r["total"] != answers[code]["total"]:
+                    errors.append(f"{code} offline after a reload: {r}")
+            page.context.set_offline(False)
+            if again and before != page.evaluate(
+                "async ([g, d]) => (await TallyStatic.query(g, d)).total", list(again[1])
+            ):
+                errors.append(f"{again[0]} changed after reading the continents")
         browser.close()
     if errors:
         raise RuntimeError(f"page errors: {errors}")
@@ -216,6 +245,11 @@ def main(
     catalog = json.loads((packs / "catalog.json").read_text())
     entries = {e["iso3"]: e for e in catalog["countries"]}
     isos = [c.upper() for c in country] if country else sorted(entries)
+    # Whole continents take the same path, from their overview packs (F-33).
+    continents = {e["iso3"]: e for e in catalog.get("continents", [])}
+    entries.update(continents)
+    if not country:
+        isos += sorted(continents)
     unknown = set(isos) - set(entries)
     if unknown:
         raise typer.BadParameter(f"not in {dist}: {sorted(unknown)}")
@@ -300,9 +334,12 @@ def main(
         console.print(f"[red]heap reached {worst['mb']:.0f} MB, over {max_mb:.0f} MB[/red]")
     if failed:
         raise typer.Exit(code=1)
-    total = sum(entries[i]["total"] for i in checked)
+    # A continent's people are its countries' people: added once, as countries.
+    places = [i for i in checked if i not in continents]
+    total = sum(entries[i]["total"] for i in places)
+    also = f" and {len(checked) - len(places)} continents" if len(places) < len(checked) else ""
     console.print(
-        f"[green]all {len(checked)} countries identical in the browser "
+        f"[green]all {len(places)} countries{also} identical in the browser "
         f"({total:,} people); memory within {max_mb:.0f} MB[/green]"
     )
 

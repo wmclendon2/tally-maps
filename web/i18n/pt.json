@@ -42,7 +42,7 @@
   "coord.e": "{v}°L",
   "coord.w": "{v}°O",
 
-  "country.how": "Todas as pessoas de um país ou território, contadas a partir dos seus próprios dados.",
+  "country.how": "Todas as pessoas de um país, território ou continente, contadas com seus próprios dados.",
   "country.choose": "Escolha um país…",
 
   "count.close": "Fechar esta contagem",
@@ -52,6 +52,7 @@
   "counted.country": {"one": "pessoa: {country}", "other": "pessoas: {country}"},
   "counted.source": "País inteiro, dados de {source}",
   "counted.sourceYear": "País inteiro, dados de {source} de {year}",
+  "counted.sourceContinent": {"one": "Dados de {source}, {n} país ou território. Cada país conta inteiro em um só continente: a Rússia na Europa, a Turquia na Ásia, o Egito na África.", "other": "Dados de {source}, {n} países e territórios. Cada país conta inteiro em um só continente: a Rússia na Europa, a Turquia na Ásia, o Egito na África."},
   "fact.area": "Área",
   "fact.density": "Densidade",
   "unit.per": "por {area}",
@@ -154,6 +155,7 @@
   "continent.Oceania": "Oceania",
   "continent.South America": "América do Sul",
   "continent.Other": "Outros",
+  "continent.all": "Toda a {continent}",
 
   "saved.downloading": "Baixando…",
   "saved.groupAll": {"one": "{n} país, salvo, {mb} MB", "other": "{n} países, todos salvos, {mb} MB"},
@@ -212,8 +214,6 @@
   "about.copyright": "&copy; 2026 Woody McLendon. Código sob a licença MIT.",
   "about.version": "Versão {version}, dados gerados em {built}.",
 
-  "country.how": "Todas as pessoas de um país ou território, contadas a partir dos seus próprios dados.",
-  "country.choose": "Escolha um país…",
   "country.HKG": "Hong Kong",
   "country.MAC": "Macau",
   "country.COD": "República Democrática do Congo",

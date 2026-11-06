@@ -32,7 +32,6 @@ but it is a deliberate choice.
 | F-28 | Parity polygons outside Africa and Brazil | Inbox | S | ★★ | ✅ | — |
 | F-29 | Provenance per pack: the source file's address and hash | Inbox | S–M | ★ | ✅ | — |
 | F-32 | Compare Meta and WorldPop where both have data | Inbox | S–M | ★★ | ✅ | — |
-| F-33 | Continent view: population total and density map | Inbox | M (S after the overview tier) | ★★ | ✅ | F-25's overview tier; F-10 for Asia and Europe |
 | F-34 | Tests with real language and people-group areas (open data) | Inbox | S–M | ★★ | ✅ | — |
 | F-35 | Detail limits: measure the cost and accuracy of more cells | Inbox | S (M if it leads to a change) | ★★ | ✅ | After F-34 |
 | F-36 | WorldPop everywhere: one source for every country | Inbox (for a future decision) | M–L | ★★ | ✅ | F-32 |
@@ -465,24 +464,18 @@ Candidates still open:
   (Switzerland), a small island, and the USA near Detroit. Results go in
   `docs/VERIFICATION.md`. Effort: S for the script, plus downloads and compute per country.
   GHS-POP could be added as an independent third view.
-- **F-33:** a continent entry at the head of each continent group in the Country tab.
-  The total is free: the sum of the catalog's country totals (`continent` is already
-  there), exact and with no download. The map is not: it would download every pack of the
-  continent today (Asia 94 MB, Africa 50 MB, North America 48 MB). It needs the overview
-  tier from F-25 (coarse levels only, one file per continent): continents hold 960 to
-  2,806 cells at resolution 3 and 4,676 to 14,636 at resolution 4, so the world's
-  resolutions 3–4 come to well under 1 MB gzipped, and the same files speed up the Country
-  tab for India and the USA. Totals are only honest with every country in: missing today
-  are about 40% of Asia (China, Pakistan, Iran, Myanmar…), 25% of Europe (Russia,
-  Ukraine), 8% of Africa (Sudan, Morocco, Somalia, South Sudan, Western Sahara), 7% of
-  South America (Venezuela), 2% of North America (Cuba and small islands), so Africa, the
-  Americas and Oceania could ship first with a "not included" line, Asia and Europe after
-  F-10 (or a move to WorldPop, F-32). Also: Natural Earth's continents by whole country
-  (Russia in Europe, Turkey in Asia, Egypt in Africa), said in the app; Oceania and North
-  America cross the 180° meridian (fitting the view, and `verify_country.py` refuses
-  it); the level rule goes into `ingest/resolve.py` and `static.js` together, with
-  parity; the answer has the same shape as a country's; overview files kept in IndexedDB
-  for offline use. Effort: M for the overview tier, then S for continents.
+- **F-33:** a whole continent at the head of each group in the Country tab. Decided
+  2026-11-06 from the shaping above and F-10's completion: every continent is complete, so
+  all six ship together. The total is the catalog's country totals added up. The map comes
+  from one overview pack per continent (`tier: "overview"`, resolutions 3 and 4, written by
+  `build_static.py`): 22 to 101 KB each, 350 KB for all six, where the countries' own packs
+  would be 5 to 170 MB. Normal is res 3 (1,105 to 3,221 cells), Fine res 4 (5,062 to 19,192),
+  by the rule countries use (`countryResolution`). The overview's cells have lost which
+  country they belong to, so they cannot speed up the Country tab: India and the USA still
+  wait on F-25. Countries count whole, by Natural Earth's continent (Russia in Europe, Turkey
+  in Asia, Egypt in Africa), and the line under the count says so. Fitting Europe's view
+  needed longitudes cut at the widest empty stretch (`lngsInLine`): the old rule, "past 180
+  if negative", threw Portugal round the world once Chukotka was in the same set.
 - **F-34:** language and people-group areas are the hard real-world shapes (multipolygons,
   holes, coastlines, areas across borders, whole-country areas) and what upload (F-02)
   users will bring. Use open, CC BY datasets only: Glottography's digitized Atlas of the
@@ -580,3 +573,4 @@ Candidates still open:
 | F-01 | French, Spanish, Portuguese and Indonesian (drafts, corrections invited): the panel, About, errors, the saved image and the map's place names; a globe beside the ? to switch | 2026-11-02 |
 | F-39 | People past the 180° line: a Radius circle or drawn shape across it is counted in full (50 km on Taveuni: 15,103, was 9,272) | 2026-11-05 |
 | F-02 | Open a file of shapes or points (GeoJSON, KML, KMZ, Shapefile, CSV): up to 500 rows counted on the device, each listed with a sum, click one for its heatmap, save all as CSV or GeoJSON | 2026-11-05 |
+| F-33 | Whole continents in the Country tab: total, density map and saving, from small overview packs (350 KB for all six) | 2026-11-05 |

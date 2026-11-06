@@ -187,6 +187,11 @@ agree to 0.011%, so the list is the better number.
 
 ## Country picker and memory
 
+The same pass answers for each continent from its overview pack: every level must sum to its
+countries' totals, the overview must survive the tidy-up of a page load and answer with no
+connection, and reading the continents must not change a drawn shape's count. **Baseline
+(2026-11-06):** 7,768,525,293 people in the six continents, exactly the 233 countries' sum.
+
 ```bash
 uv run --group browser python scripts/browser_countries.py \
     [--dist DIR] [--country XXX] [--max-mb 200] [--no-stress]

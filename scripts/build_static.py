@@ -43,6 +43,7 @@ from build_packs import (
     country_outline,
     ensure,
     write_catalog,
+    write_overviews,
 )
 
 from ingest.config import ROOT, source_keys
@@ -217,7 +218,8 @@ def main(
     for e in entries.values():
         for p in e["parts"]:
             shutil.copy2(PACK_CACHE / p["url"], packs / p["url"])
-    write_catalog(packs, entries)
+    continents = write_overviews(packs, entries)
+    write_catalog(packs, entries, continents)
 
     console.print(f"\n[green]Built {out}[/green] in {time.perf_counter() - t0:.0f} s")
     for e in entries.values():
@@ -226,6 +228,11 @@ def main(
         console.print(
             f"  {e['iso3']} {e['name']}: {e['total']:,} people, {len(parts)} part(s), "
             f"{e['bytes'] / 1e6:.2f} MB (largest file {biggest / 1e6:.2f} MB)"
+        )
+    for c in continents:
+        console.print(
+            f"  {c['name']}: {c['total']:,} people, {len(c['countries'])} countries, "
+            f"overview {c['bytes'] / 1e3:.0f} KB"
         )
     console.print(f"  catalog.json: {(packs / 'catalog.json').stat().st_size / 1e3:.0f} KB")
     console.print(

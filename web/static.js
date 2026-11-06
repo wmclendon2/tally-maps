@@ -16,7 +16,8 @@
  *
  * Memory: only the one resolution a query reads is kept from each part, and only up to
  * MEMORY_BUDGET (see there). country() answers for a whole country straight from its
- * packs, with no outline: the country picker in app.js.
+ * packs, with no outline: the country picker in app.js. A continent takes the same path, from
+ * one small overview pack holding only its coarse levels (F-33).
  *
  * A deploy that rebuilds a country renames its pack files (they are named by content), so
  * a page loaded before it asks for files that are gone. A 404 on a pack makes a query read
@@ -51,6 +52,9 @@ const TallyStatic = (() => {
   let catalogBase = null;
   const byRoot = new Map(); // res-3 cell -> parts whose footprint holds it
   const parts = new Map(); // url -> part (catalog entry plus iso3, name, maxRes)
+  // A continent's overview pack (F-33). Not in `parts` or `byRoot`: a drawn shape must never
+  // read one, or it would count the same people twice.
+  const overviews = new Map();
   const tables = new Map(); // `${url}|${res}` -> {hi, lo, pop, bytes}, least recently used first
   let tableBytes = 0;
   const pendingTables = new Map(); // `${url}|${res}` -> Promise<table>, while loading
@@ -347,7 +351,7 @@ const TallyStatic = (() => {
 
   // Drop stored parts the catalog no longer lists (a rebuilt country gets new names).
   async function pruneStored() {
-    const stale = (await storedKeys()).filter((k) => !parts.has(k));
+    const stale = (await storedKeys()).filter((k) => !parts.has(k) && !overviews.has(k));
     if (stale.length) await idb("readwrite", (s) => stale.forEach((k) => s.delete(k)));
   }
 
@@ -380,6 +384,7 @@ const TallyStatic = (() => {
     catalogBase = cBase;
     catalog = c;
     parts.clear();
+    overviews.clear();
     byRoot.clear();
     for (const country of catalog.countries) {
       for (const p of country.parts) {
@@ -397,6 +402,9 @@ const TallyStatic = (() => {
         }
       }
     }
+    for (const c of catalog.continents ?? [])
+      for (const p of c.parts)
+        overviews.set(p.url, { ...p, iso3: c.iso3, name: c.name, maxRes: c.max_resolution, source: c.source });
     pruneStored().catch((err) => console.warn("could not tidy stored data:", err));
   }
 
@@ -415,7 +423,8 @@ const TallyStatic = (() => {
   async function refresh() {
     await load(dataUrl());
     const fresh = await readCatalog(dataUrl());
-    const names = (c) => c.countries.flatMap((x) => x.parts.map((p) => p.url)).join(" ");
+    const names = (c) =>
+      [...c.countries, ...(c.continents ?? [])].flatMap((x) => x.parts.map((p) => p.url)).join(" ");
     const changed = fresh.m.built !== manifest.built || names(fresh.c) !== names(catalog);
     if (changed) {
       install(fresh);
@@ -690,13 +699,14 @@ const TallyStatic = (() => {
   async function countryOnce(iso3, detail, onProgress) {
     const t0 = performance.now();
     await load(dataUrl());
-    const c = catalog.countries.find((x) => x.iso3 === iso3);
+    // A continent answers to its code ("continent:Africa") just as a country does.
+    const c = [...catalog.countries, ...(catalog.continents ?? [])].find((x) => x.iso3 === iso3);
     if (!c) throw new Error(`No data for ${iso3}`);
     if (!c.cells_by_resolution || !c.area_km2)
       throw said(new Error("This data is older than the country picker. Reload to update."), "err.oldData");
     if (!(detail >= 0 && detail <= MAX_DETAIL)) throw new Error(`detail must be between 0 and ${MAX_DETAIL}`);
     const resolution = countryResolution(c, detail);
-    const needed = c.parts.map((p) => parts.get(p.url));
+    const needed = c.parts.map((p) => parts.get(p.url) ?? overviews.get(p.url));
     const { got, failed } = await gather(needed, resolution, onProgress);
     const out = [];
     let total = 0;
@@ -728,7 +738,15 @@ const TallyStatic = (() => {
         total: c.total,
         data_version: c.data_version,
       },
+      // The continent's name, and how many countries its total adds up.
+      ...(c.key ? { continent: c.key, continent_countries: c.countries.length } : {}),
     };
+  }
+
+  // The continents the catalog has an overview for.
+  async function continents() {
+    await ready;
+    return (catalog.continents ?? []).map((c) => c.key);
   }
 
   // What the memory cap is holding, for scripts/browser_countries.py and for debugging.
@@ -738,5 +756,5 @@ const TallyStatic = (() => {
   // back); fires "tally:data-updated" when it has. Quietly false offline.
   const checkForUpdate = () => refresh().catch(() => false);
 
-  return { load, query, country, countries, saveCountry, removeCountry, memory, checkForUpdate };
+  return { load, query, country, countries, continents, saveCountry, removeCountry, memory, checkForUpdate };
 })();

@@ -20,10 +20,13 @@ from build_packs import (
     ALIGN,
     FORMAT,
     MAGIC,
+    OVERVIEW_LEVELS,
     build_country,
+    build_overview,
     coarse_parent,
     data_version,
     decode,
+    encode,
     merge,
     pack_bytes,
     parent_at,
@@ -316,3 +319,60 @@ def test_catalog_backfills_what_the_country_picker_reads(tmp_path):
     assert listed["cells_by_resolution"] == counts  # read back from the pack headers
     assert listed["area_km2"] == 1000.0  # tests/conftest.py
     assert sum(counts.values()) == entry["parts"][0]["cells"]
+
+
+def _country_pack(root: Path, iso3: str, cells: dict[int, float]) -> dict:
+    """A pack on disk at res 3, 4 and 5, its people spread over one child each."""
+    levels = {}
+    for res in (3, 4, 5):
+        at = {
+            h3.str_to_int(h3.cell_to_center_child(h3.int_to_str(c), res)): n
+            for c, n in cells.items()
+        }
+        order = sorted(at)
+        levels[res] = (np.array(order, dtype=np.uint64), np.array([at[c] for c in order]))
+    body, sections = encode(levels)
+    raw = pack_bytes({"iso3": iso3, "sections": sections, "total": sum(cells.values())}, body)
+    url = f"{iso3}.tlyp.gz"
+    (root / url).write_bytes(gzip.compress(raw, 9, mtime=0))
+    return {
+        "iso3": iso3,
+        "source": "meta_hrsl",
+        "total": round(sum(cells.values())),
+        "area_km2": 100.0,
+        "parts": [{"url": url}],
+    }
+
+
+CELLS = [h3.str_to_int(c) for c in sorted(h3.get_res0_cells())[:3]]
+CELLS = [h3.str_to_int(min(h3.cell_to_children(h3.int_to_str(c), 3))) for c in CELLS]
+
+
+def test_overview_merges_a_continent_at_its_coarse_levels(tmp_path):
+    shared, a_only, b_only = CELLS
+    members = [
+        _country_pack(tmp_path, "AAA", {shared: 10.0, a_only: 5.0}),
+        _country_pack(tmp_path, "BBB", {shared: 7.0, b_only: 1.0}),
+    ]
+    packed, entry = build_overview("North America", members, tmp_path)
+    raw = gzip.decompress(packed)
+    header, start = unpack(raw)
+    levels = decode(raw[start:], header["sections"])
+    assert sorted(levels) == list(OVERVIEW_LEVELS)  # res 5 stays out, which keeps it small
+    assert header["tier"] == "overview"
+    pops = dict(zip(levels[3][0].tolist(), levels[3][1].tolist(), strict=True))
+    assert pops[shared] == 17.0, "a cell on a border holds both countries' people"
+    assert float(levels[4][1].sum()) == 23.0, "every level adds up to the same people"
+    assert entry["iso3"] == "continent:North America" and entry["total"] == 23
+    assert entry["countries"] == ["AAA", "BBB"] and entry["area_km2"] == 200.0
+    assert entry["cells_by_resolution"] == {"3": 3, "4": 3}
+    assert entry["parts"][0]["url"].startswith("continent-north-america.")
+    assert entry["parts"][0]["sha256"] == hashlib.sha256(packed).hexdigest()
+    assert "footprint" not in entry["parts"][0], "a drawn shape must never read an overview"
+
+
+def test_overview_is_the_same_file_each_build(tmp_path):
+    members = [_country_pack(tmp_path, "AAA", {CELLS[0]: 3.0})]
+    assert (
+        build_overview("Asia", members, tmp_path)[0] == build_overview("Asia", members, tmp_path)[0]
+    )

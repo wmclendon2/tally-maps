@@ -42,7 +42,7 @@
   "coord.e": "{v}° BT",
   "coord.w": "{v}° BB",
 
-  "country.how": "Semua orang di satu negara atau wilayah, dihitung dari datanya sendiri.",
+  "country.how": "Semua orang di satu negara, wilayah, atau benua, dihitung dari datanya sendiri.",
   "country.choose": "Pilih negara…",
 
   "count.close": "Tutup hitungan ini",
@@ -52,6 +52,7 @@
   "counted.country": {"other": "orang di {country}"},
   "counted.source": "Seluruh negara, data {source}",
   "counted.sourceYear": "Seluruh negara, data {source} tahun {year}",
+  "counted.sourceContinent": {"other": "Data {source}, {n} negara dan wilayah. Setiap negara dihitung utuh di satu benua: Rusia di Eropa, Turki di Asia, Mesir di Afrika."},
   "fact.area": "Luas",
   "fact.density": "Kepadatan",
   "unit.per": "per {area}",
@@ -154,6 +155,7 @@
   "continent.Oceania": "Oseania",
   "continent.South America": "Amerika Selatan",
   "continent.Other": "Lainnya",
+  "continent.all": "Seluruh {continent}",
 
   "saved.downloading": "Mengunduh…",
   "saved.groupAll": {"other": "{n} negara, semua tersimpan, {mb} MB"},
@@ -212,8 +214,6 @@
   "about.copyright": "&copy; 2026 Woody McLendon. Kode di bawah lisensi MIT.",
   "about.version": "Versi {version}, data dibuat {built}.",
 
-  "country.how": "Semua orang di satu negara atau wilayah, dihitung dari datanya sendiri.",
-  "country.choose": "Pilih negara…",
   "country.HKG": "Hong Kong",
   "country.MAC": "Makau",
   "country.COD": "Republik Demokratik Kongo",

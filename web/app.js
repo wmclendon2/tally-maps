@@ -114,12 +114,29 @@ function hexRing(h) {
   return ring;
 }
 
-// [[w, s], [e, n]] round a set of cells, across the antimeridian when they straddle it
-// (Fiji, Kiribati): then e is past 180, which fitBounds takes as the short way round.
+// Longitudes on one line, cut where the widest stretch of the globe holds none, so what sits
+// together stays together. Usually that stretch holds the 180th meridian and nothing moves.
+// Fiji and Kiribati straddle it: their west goes past 180. Europe with all of Russia runs from
+// the Azores round to Chukotka: "past 180 if negative" would throw Portugal round the world
+// (F-33), where this moves Chukotka alone.
+function lngsInLine(lngs) {
+  const sorted = [...new Set(lngs)].sort((a, b) => a - b);
+  let cut = sorted[0];
+  let widest = sorted[0] + 360 - sorted[sorted.length - 1];
+  for (let i = 1; i < sorted.length; i++)
+    if (sorted[i] - sorted[i - 1] > widest) {
+      widest = sorted[i] - sorted[i - 1];
+      cut = sorted[i];
+    }
+  return (x) => (x < cut ? x + 360 : x);
+}
+
+// [[w, s], [e, n]] round a set of cells, across the antimeridian when they straddle it: then
+// e is past 180, which fitBounds takes as the short way round.
 function cellsBounds(cells) {
   const pts = cells.map((c) => h3.cellToLatLng(c.h3));
-  let lngs = pts.map((p) => p[1]);
-  if (Math.max(...lngs) - Math.min(...lngs) > 180) lngs = lngs.map((x) => (x < 0 ? x + 360 : x));
+  const inLine = lngsInLine(pts.map((p) => p[1]));
+  const lngs = pts.map((p) => inLine(p[1]));
   const lats = pts.map((p) => p[0]);
   // Pad by about a cell, so edge cells are not cut in half.
   const pad = cells.length ? Math.sqrt(h3.cellArea(cells[0].h3, "km2")) / 111 : 0;
@@ -137,10 +154,8 @@ const FRAME_SHARE = 0.99;
 function peopleBounds(cells) {
   if (!cells.length) return null;
   const pts = cells.map((c) => h3.cellToLatLng(c.h3));
-  const lngs = pts.map((p) => p[1]);
-  // The same unwrapping as cellsBounds, so an island across 180 degrees is near, not far.
-  const wrap = Math.max(...lngs) - Math.min(...lngs) > 180;
-  const lng = (x) => (wrap && x < 0 ? x + 360 : x);
+  // As in cellsBounds, so an island across 180 degrees is near, not far.
+  const lng = lngsInLine(pts.map((p) => p[1]));
   let total = 0, mx = 0, my = 0;
   cells.forEach((c, i) => {
     total += c.population;
@@ -1195,9 +1210,12 @@ async function showStaticData() {
 // lists them. Picking one shows all of it, counted from its own data (TallyStatic.country).
 async function fillPicker() {
   const select = $("country-pick");
+  const whole = new Set(await TallyStatic.continents());
   for (const [k, countries] of byContinent(await TallyStatic.countries())) {
     const group = document.createElement("optgroup");
     group.label = continentName(k);
+    // The whole continent at the head of its group (F-33).
+    if (whole.has(k)) group.append(new Option(t("continent.all", { continent: continentName(k) }), `continent:${k}`));
     for (const c of countries) group.append(new Option(c.shownName, c.iso3));
     select.append(group);
   }
@@ -1226,6 +1244,9 @@ const listNames = (names) =>
 // file names the continents.
 const countryName = (iso3, fallback) => TallyI18n.countryName(iso3, fallback);
 const continentName = (k) => t(`continent.${k}`);
+// A country or, by its code ("continent:Africa"), a whole continent.
+const placeName = (code, name) =>
+  code?.startsWith("continent:") ? continentName(code.slice("continent:".length)) : countryName(code, name);
 const byLocalName = (a, b) => a.localeCompare(b, TallyI18n.locale, { sensitivity: "base" });
 
 // Countries by continent, each in name order as the visitor's language sorts them, with
@@ -1249,7 +1270,7 @@ function errText(err) {
   if (!err?.key) return err?.message ?? String(err);
   const vars = { ...err.vars };
   // By its code in other languages; in English by the name the catalog gives.
-  if (vars.country) vars.country = countryName(vars.country, vars.name ?? vars.country);
+  if (vars.country) vars.country = placeName(vars.country, vars.name ?? vars.country);
   return t(err.key, vars);
 }
 
@@ -1389,7 +1410,7 @@ async function runQuery(ask, { frame = null, fresh = false, maxZoom = 16 } = {})
 
 // Older static.js (a cached shell) reports names only; it is never paired with this file.
 const downloadText = ({ received, total, names, iso3s }) => {
-  const shown = iso3s ? iso3s.map((c, i) => countryName(c, names[i])) : names;
+  const shown = iso3s ? iso3s.map((c, i) => placeName(c, names[i])) : names;
   return t("status.downloading", { names: listNames(shown), got: fmtMB(received), total: fmtMB(total) });
 };
 const showDownload = (progress) => {
@@ -1466,13 +1487,19 @@ function render(res) {
   // Under the number, in words: what was counted.
   const n = Math.round(res.total);
   $("counted").textContent = res.country
-    ? t("counted.country", { n, country: countryName(res.country.iso3, res.country.name) })
+    ? t("counted.country", { n, country: placeName(res.country.iso3, res.country.name) })
     : lastLabel
       ? t("counted.where", { n, where: lastLabel() })
       : t("counted.shape", { n });
   // Which data a country's count is, since there is no drawn shape to explain it.
   $("counted-source").hidden = !res.country;
-  if (res.country) {
+  if (res.continent) {
+    // Which countries are in it decides the number, so the line says how they were filed.
+    $("counted-source").textContent = t("counted.sourceContinent", {
+      n: res.continent_countries,
+      source: sourceNames(res.source),
+    });
+  } else if (res.country) {
     const year = String(res.country.data_version ?? "").slice(0, 4);
     $("counted-source").textContent = t(year ? "counted.sourceYear" : "counted.source", {
       source: sourceNames(res.source),
@@ -1782,7 +1809,7 @@ const round = (x, places) => Math.round(x * 10 ** places) / 10 ** places;
 // The image's title and the files' `name`: what was counted, in the visitor's language.
 const countTitle = (res) =>
   res.country
-    ? t("image.titleCountry", { country: countryName(res.country.iso3, res.country.name) })
+    ? t("image.titleCountry", { country: placeName(res.country.iso3, res.country.name) })
     : lastLabel
       ? t("image.titleWhere", { where: lastLabel() })
       : t("image.titleShape");
@@ -1790,9 +1817,9 @@ const countTitle = (res) =>
 // What was counted, in the same words as the panel and the image. The keys and `kind`
 // stay English whatever the language: other tools read them.
 function exportSummary(res, row = selectedRow()) {
-  const kind = res.country ? "country" : row ? row.kind : lastLabel ? "circle" : "shape";
+  const kind = res.continent ? "continent" : res.country ? "country" : row ? row.kind : lastLabel ? "circle" : "shape";
   const name = res.country
-    ? countryName(res.country.iso3, res.country.name)
+    ? placeName(res.country.iso3, res.country.name)
     : row
       ? rowName(row)
       : countTitle(res);
@@ -1800,7 +1827,7 @@ function exportSummary(res, row = selectedRow()) {
   return {
     name,
     kind,
-    country_iso3: res.country?.iso3 ?? "",
+    country_iso3: res.continent ? "" : (res.country?.iso3 ?? ""),
     population_estimate: Math.round(res.total),
     area_km2: round(res.areaKm2, 3),
     area_mi2: round(res.areaKm2 / UNITS.imperial.km2, 3),

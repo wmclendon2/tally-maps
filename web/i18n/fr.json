@@ -42,7 +42,7 @@
   "coord.e": "{v}°E",
   "coord.w": "{v}°O",
 
-  "country.how": "Toutes les personnes d'un pays ou d'un territoire, comptées à partir de ses propres données.",
+  "country.how": "Toutes les personnes d'un pays, d'un territoire ou d'un continent, comptées à partir de ses propres données.",
   "country.choose": "Choisir un pays…",
 
   "count.close": "Fermer ce comptage",
@@ -52,6 +52,7 @@
   "counted.country": {"one": "personne : {country}", "other": "personnes : {country}"},
   "counted.source": "Pays entier, données {source}",
   "counted.sourceYear": "Pays entier, données {source} de {year}",
+  "counted.sourceContinent": {"one": "Données {source}, {n} pays ou territoire. Un pays compte en entier dans un seul continent : la Russie en Europe, la Turquie en Asie, l'Égypte en Afrique.", "other": "Données {source}, {n} pays et territoires. Un pays compte en entier dans un seul continent : la Russie en Europe, la Turquie en Asie, l'Égypte en Afrique."},
   "fact.area": "Superficie",
   "fact.density": "Densité",
   "unit.per": "par {area}",
@@ -154,6 +155,7 @@
   "continent.Oceania": "Océanie",
   "continent.South America": "Amérique du Sud",
   "continent.Other": "Autres",
+  "continent.all": "Toute l'{continent}",
 
   "saved.downloading": "Téléchargement…",
   "saved.groupAll": {"one": "{n} pays, enregistré, {mb} Mo", "other": "{n} pays, tous enregistrés, {mb} Mo"},
@@ -212,8 +214,6 @@
   "about.copyright": "&copy; 2026 Woody McLendon. Code sous licence MIT.",
   "about.version": "Version {version}, données générées le {built}.",
 
-  "country.how": "Toutes les personnes d'un pays ou d'un territoire, comptées à partir de ses propres données.",
-  "country.choose": "Choisir un pays…",
   "country.HKG": "Hong Kong",
   "country.MAC": "Macao",
   "country.COD": "République démocratique du Congo",

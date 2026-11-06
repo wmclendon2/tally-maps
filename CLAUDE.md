@@ -62,6 +62,9 @@ Read it before changing the pipeline, the pack format or the resolver.
 - Packs hold whole people (`build_packs.whole_people`, since 2026-10-18): no cell may show
   a fraction or "0 people". Keep it in any change to how levels are built; the tests check
   every level, and every cell's children, sum exactly.
+- A continent's overview pack (F-33) stays out of `parts` and `byRoot` in static.js and has no
+  footprint: a drawn shape reading one would count the same people twice. It answers through
+  `TallyStatic.country("continent:Africa")`, so `countryResolution` and `browser_countries.py` cover it.
 - Pack format: a format **major** bump makes old readers refuse a pack; additive changes
   bump the minor. Packs are named by content hash; `write_catalog` adds `continent`,
   `cells_by_resolution` and `area_km2` at write time, so those need no pack rebuild.

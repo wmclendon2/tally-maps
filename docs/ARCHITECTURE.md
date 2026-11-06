@@ -115,6 +115,11 @@ The resolution is chosen per question (`web/static.js`, with the Python referenc
   parts a shape needs with no outlines at all. A first count over São Paulo downloads one
   part of Brazil, not the whole of it. Brazil has 6 parts, the USA 13 and India 16. All
   233 countries come to 373 MB (198 were 412 MB before whole people, which compress better).
+- **Overviews.** A continent has one small pack holding only resolutions 3 and 4, its countries
+  merged (`tier: "overview"`, 350 KB for all six), so the Country tab can show a continent with
+  no country's download. `build_static.py` writes them for what it builds, and the catalog lists
+  them under `continents`, apart from `countries`. They have no footprint and `static.js` keeps
+  them out of its cell index: a drawn shape never reads one, or it would count people twice.
 - **Names.** Pack files are named by content hash and never change, so hosts and browsers
   can cache them forever.
 
@@ -136,7 +141,7 @@ In static mode, `web/static.js`:
 
 The page grays out land it has no data for (`build_static.no_data`, from Natural Earth
 minus the built countries' outlines). The **Country** tab sums a country's own packs at
-one level, with no outline or polyfill.
+one level, with no outline or polyfill; a continent takes the same path from its overview.
 
 **A file of shapes or points** (F-02). The **File** tab reads GeoJSON, CSV, KML, KMZ and
 Shapefiles (zipped or loose) in the page: nothing is uploaded. `web/files.js` turns a file
